@@ -1,0 +1,50 @@
+#!/bin/bash
+
+SERVICE=$1
+if [[ $SERVICE == "" ]]; then
+	echo "The following docker services are running ..."
+	echo ""
+	docker ps --format '{{.Names}}'
+	echo "Choose a running service:"
+	read SERVICE
+fi
+
+DOCKER_ID=$(docker ps --filter "name=$SERVICE" --format "{{.ID}}")
+echo "Docker ID $DOCKER_ID"
+NVIM_V=$(docker exec $DOCKER_ID which nvim)
+LIN_PACKAGE_MANAGER=$(docker exec $DOCKER_ID which apk)
+INTERPRETER=$(docker exec $DOCKER_ID ls /lib | grep "ld-musl-aarch64.so.1")
+
+set -e
+USER=$(docker exec $DOCKER_ID whoami)
+ARCH=$(docker exec $DOCKER_ID uname -m)
+if [[ $INTERPRETER != "" ]]; then
+	ARCH="alpine-$ARCH"
+fi
+
+echo ""
+echo "Service Found:"
+echo "$SERVICE -> $DOCKER_ID @ $USER "
+
+f_install_neovim() {
+	docker exec $DOCKER_ID mkdir -p "/$USER/.config"
+	docker cp ~/.config/nvim/. "$DOCKER_ID:/$USER/.config/nvim"
+	docker cp ~/neovim/$ARCH "$DOCKER_ID:/$USER/neovim"
+	docker exec $DOCKER_ID rm -f "/$USER/.config/nvim/lazy-lock.json"
+	docker exec $DOCKER_ID rm -f /bin/nvim
+	docker exec $DOCKER_ID ln -s "/$USER/neovim/build/bin/nvim" /bin/nvim
+}
+
+if [[ $LIN_PACKAGE_MANAGER == "" ]]; then
+	# nodejs npm
+	docker exec $DOCKER_ID apt-get install -y gcc git g++ wget
+else
+	docker exec $DOCKER_ID apk add gcc git g++ wget
+fi
+
+if [[ $NVIM_V == "" ]]; then
+	echo "installing"
+	f_install_neovim
+fi
+
+docker exec -it $DOCKER_ID bash -c 'export VIMRUNTIME="/$(whoami)/neovim/runtime/" && bash'
