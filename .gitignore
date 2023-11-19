@@ -1,4 +1,7 @@
 gcloud
 configstore
 nvim2
+dnvim/builds
+.aws
+aws
 .DS_Store

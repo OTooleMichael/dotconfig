@@ -29,6 +29,8 @@ vim.api.nvim_create_user_command("Fscript", function(opts)
 end, { nargs = "*" })
 
 vim.keymap.set("i", "jj", "<Esc>")
+vim.keymap.set("n", 'gs"', 'gsaiw"', { remap = true })
+vim.keymap.set("n", "gs'", "gsaiw'", { remap = true })
 vim.keymap.set("n", "<leader>o", "o<Esc>")
 vim.keymap.set("n", "<leader>O", "O<Esc>")
 vim.keymap.set("n", "<leader>rf", ":Fscript format<CR>")
