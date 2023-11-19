@@ -28,6 +28,8 @@ vim.api.nvim_create_user_command("Fscript", function(opts)
   print("Error: couldn't find script for command - " .. command)
 end, { nargs = "*" })
 
+vim.keymap.set("n", "<leader>wj", "<cmd>vertical resize -10<cr>", { desc = "Decrease window width", remap = true })
+vim.keymap.set("n", "<leader>wk", "<cmd>vertical resize +10<cr>", { desc = "Increase window width", remap = true })
 vim.keymap.set("i", "jj", "<Esc>")
 vim.keymap.set("n", 'gs"', 'gsaiw"', { remap = true })
 vim.keymap.set("n", "gs'", "gsaiw'", { remap = true })

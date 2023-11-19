@@ -1,15 +1,20 @@
 import argparse
 import os
+import enum
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
 import subprocess
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Union
 import functools
 
 BUILDS_FOLDER = Path(__file__).parent / "builds"
 BUILDS_FOLDER.mkdir(parents=True, exist_ok=True)
 
+class Installer(enum.Enum):
+    APK = "apk"
+    APT = "apt-get"
+    NONE = "NONE"
 
 @dataclass(frozen=True, eq=True)
 class BuildDesc:
@@ -52,13 +57,20 @@ class Registry:
 
     def list(self):
         seen_versions = set()
+        if not self.data:
+            print("No existing builds found")
+            return
+        print("Images found:")
         for desc in self.data:
             version_str = f"v{desc.version} / {desc.arch} {desc.interperter}"
             if version_str not in seen_versions:
-                print(version_str)
                 seen_versions.add(version_str)
 
-            print(" image " + desc.image_name)
+            print(f" - {desc.image_name} ({version_str})")
+
+        print("Archs found:")
+        for version in seen_versions:
+            print(" - " + version)
 
     @property
     def filepath(self) -> Path:
@@ -96,7 +108,7 @@ class SysInfo:
     user: str
     arch: str
     envs: Dict[str, str]
-    install_system: str
+    install_system: Installer
     ld_musl_aarch64: bool
     installed: Dict[str, bool]
     def home(self) -> str:
@@ -172,14 +184,14 @@ class DockerSummary:
             return self._sys_info
         _, arch = self.exec(["uname","-m"])
         _, user = self.exec("whoami")
-        install_system = ""
+        install_system = Installer.NONE
         has_apt = self.exec(["which", "apt-get"])[0] == 0
         has_apk = self.exec(["which", "apk"])[0] == 0
 
         if has_apt:
-            install_system = "apt-get"
+            install_system = Installer.APT
         if has_apk:
-            install_system = "apk"
+            install_system = Installer.APK
 
         interperter = self.exec([
             "ls", "/lib",
@@ -209,13 +221,14 @@ class DockerSummary:
     @functools.cache
     def install_setup(self):
         print("install setup")
-        if self.system_info().install_system == "apt-get":
+        if self.system_info().install_system == Installer.APT:
             code, res = self.exec(["apt-get", "update", "--fix-missing"])
             if code:
                 print(res)
                 raise RuntimeError("Failed")
             self.exec(["apt-get","install", "-y", "apt-utils"])
             return
+
         self.exec(["apk", "update"])
 
     def link_nvim(self):
@@ -266,11 +279,13 @@ class DockerSummary:
         self.install_setup()
         sys_info = self.system_info()
         install_system = sys_info.install_system
+
         command = [
             "apt-get", "install", "-y",
-        ] if install_system == "apt-get" else ["apk", "add"]
+        ] if install_system == Installer.APT else ["apk", "add"]
         if lean and install_system == "apt-get":
             command.append("--no-install-recommends")
+
         code, output = self.exec(command + packages)
         print("Installed ", packages, code)
         if code != 0:
@@ -279,7 +294,9 @@ class DockerSummary:
 
     def ensure_deps(self):
         self.install_setup()
-        self.install(["gcc", "g++", "wget", "rgrep", "git"])
+        self.install([
+            "wget", "git", "ripgrep",
+        ])
         sys_info = self.system_info()
 
         if not sys_info.installed["node"]:
@@ -293,6 +310,7 @@ class DockerSummary:
         if not overwrite and sys_info.installed["nvim"]:
             return
         self.install([
+            "gcc", "g++"
             "curl", "unzip", "make", "gettext", "cmake",
         ])
         zip_location = "/tmp/neovim.zip"
@@ -396,18 +414,13 @@ class Docker:
 
 
 
-parser = argparse.ArgumentParser(
-    prog="dvnim",
-    description="Handle creating Neovim setup within Docker Containers",
-)
-parser.add_argument("container_name", default="", nargs="?")
-parser.add_argument("--sync-config", action="store_true")
-parser.add_argument("-b","--build", action="store_true")
-parser.add_argument("-s","--store", action="store_true")
 
-def main() -> None:
-    args = parser.parse_args()
+
+        
+
+def run_dnvim() -> None:
     processes = Docker.ps()
+    args = parser.parse_args()
     registry = Registry()
     registry.load()
     container_name = args.container_name
@@ -467,6 +480,37 @@ def main() -> None:
     docker.docker_enter()
 
 
+def run_list():
+    registry = Registry()
+    registry.load()
+    print("The following built nvim caches exist locally")
+    print("")
+    registry.list()
+
+
+def main() -> None:
+    args = parser.parse_args()
+    container_name = args.container_name
+    if container_name == "list":
+        run_list()
+        return exit(0)
+
+    run_dnvim()
+    exit(0)
+
+parser = argparse.ArgumentParser(
+    prog="dvnim",
+    description="Handle creating Neovim setup within Docker Containers",
+)
+parser.add_argument(
+    "container_name",
+    help="Container Name or named_action (list, )",
+    default="",
+    nargs="?",
+)
+parser.add_argument("--sync-config", action="store_true")
+parser.add_argument("-b","--build", action="store_true")
+parser.add_argument("-s","--store", action="store_true")
 
 if __name__ == "__main__":
     main()
