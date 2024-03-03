@@ -35,29 +35,30 @@ return {
     event = "VeryLazy",
     config = function()
       require("chatgpt").setup({
-        api_key_cmd = "echo " .. require("plugins.secrets").get_secret("chatgpt"),
+        -- load the API key from a file one folder above
+        api_key_cmd = "echo " .. require("secrets").get_secret("chatgpt"),
+        edit_with_instructions = {
+          diff = false,
+          keymaps = {
+            close = "<C-c>",
+            accept = "<leader>y",
+            toggle_diff = "<C-d>",
+            toggle_settings = "<C-o>",
+          },
+        },
+        chat = {
+          keymaps = {
+            close = "q",
+            yank_last = "<C-y>",
+            yank_last_code = "<C-k>",
+            scroll_up = "<C-u>",
+            scroll_down = "<C-d>",
+            new_session = "<C-n>",
+            cycle_windows = "<Tab>",
+          },
+        },
       })
     end,
-    edit_with_instructions = {
-      diff = false,
-      keymaps = {
-        close = "<C-c>",
-        accept = "<leader>y",
-        toggle_diff = "<C-d>",
-        toggle_settings = "<C-o>",
-      },
-    },
-    chat = {
-      keymaps = {
-        close = "q",
-        yank_last = "<C-y>",
-        yank_last_code = "<C-k>",
-        scroll_up = "<C-u>",
-        scroll_down = "<C-d>",
-        new_session = "<C-n>",
-        cycle_windows = "<Tab>",
-      },
-    },
     dependencies = {
       "MunifTanjim/nui.nvim",
       "nvim-lua/plenary.nvim",

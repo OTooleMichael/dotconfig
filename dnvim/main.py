@@ -15,10 +15,12 @@ import functools
 BUILDS_FOLDER = Path(__file__).parent / "builds"
 BUILDS_FOLDER.mkdir(parents=True, exist_ok=True)
 
+
 class Installer(enum.Enum):
     APK = "apk"
     APT = "apt-get"
     NONE = "NONE"
+
 
 @dataclass(frozen=True, eq=True)
 class BuildDesc:
@@ -30,7 +32,12 @@ class BuildDesc:
     image_name: str
 
     def path(self, base_path: Path = BUILDS_FOLDER) -> Path:
-        return base_path / self.version / f"{self.arch}-{self.interperter}" / self.image_name
+        return (
+            base_path
+            / self.version
+            / f"{self.arch}-{self.interperter}"
+            / self.image_name
+        )
 
 
 class Registry:
@@ -52,9 +59,10 @@ class Registry:
         if values:
             return values[0]
         values = [
-            e for e in self.data 
+            e
+            for e in self.data
             if e.arch == desc.arch and e.interperter == desc.interperter
-        ] 
+        ]
         if values:
             return values[0]
         return None
@@ -90,15 +98,11 @@ class Registry:
 
         with open(location) as fp:
             res = json.load(fp)
-            self.data = [
-                BuildDesc(**d) for d in res["data"]
-            ]
+            self.data = [BuildDesc(**d) for d in res["data"]]
 
     def save(self):
         with open(self.filepath, "w") as fp:
-            json.dump({
-                "data": [asdict(d) for d in self.data]
-            }, fp)
+            json.dump({"data": [asdict(d) for d in self.data]}, fp)
 
 
 def _run(args: List[str]) -> Tuple[int, str]:
@@ -115,6 +119,7 @@ class SysInfo:
     install_system: Installer
     ld_musl_aarch64: bool
     installed: Dict[str, bool]
+
     def home(self) -> str:
         return self.envs["HOME"]
 
@@ -128,7 +133,7 @@ class DockerSummary:
     payload: Dict
     _sys_info: Optional[SysInfo] = None
     _skip_installs: str = ""
-    
+
     def __hash__(self) -> int:
         return id(self)
 
@@ -144,11 +149,12 @@ class DockerSummary:
         )
 
     @contextlib.contextmanager
-    def _ensure_copy_wather_process(self) -> Generator[None,None,None]:
+    def _ensure_copy_wather_process(self) -> Generator[None, None, None]:
+        """
+        Ensure that the copy watcher process is running.
+        """
         command = [sys.executable, __file__, "copy", "-n", self.id]
-        if not subprocess.run([
-            "pgrep", "-f", " ".join(command)
-        ]).returncode: 
+        if not subprocess.run(["pgrep", "-f", " ".join(command)]).returncode:
             print("Copy watcher already running")
             yield None
             return None
@@ -164,17 +170,18 @@ class DockerSummary:
             print("Killing copy watcher")
             copy_p.terminate()
 
-
-
     def enter(self):
         with self._ensure_copy_wather_process():
             try:
-                subprocess.check_call([
-                    "docker", "exec",
-                    "-it",
-                    self.id,
-                    "bash" if self.system_info().installed["bash"] else "sh",
-                ])
+                subprocess.check_call(
+                    [
+                        "docker",
+                        "exec",
+                        "-it",
+                        self.id,
+                        "bash" if self.system_info().installed["bash"] else "sh",
+                    ]
+                )
             except subprocess.CalledProcessError as err:
                 if err.returncode in (130, 127):
                     print("Safely exited")
@@ -184,17 +191,19 @@ class DockerSummary:
     def exec(self, command: str | List[str], workingdir: str = "") -> Tuple[int, str]:
         if isinstance(command, str):
             command = [command]
-        code, result =  _run([
-            "docker", 
-            "exec",
-            *(["-w", workingdir] if workingdir else []),
-            self.id,
-            *command,
-        ])
+        code, result = _run(
+            [
+                "docker",
+                "exec",
+                *(["-w", workingdir] if workingdir else []),
+                self.id,
+                *command,
+            ]
+        )
         return code, result.strip()
 
     def file_exists(self, path: str, is_dir: bool = False):
-        code, _ = self.exec(["test","-d" if is_dir else "-f", path])
+        code, _ = self.exec(["test", "-d" if is_dir else "-f", path])
         return code == 0
 
     def copy(self, to_docker: bool, from_path: str, to_path: str):
@@ -212,7 +221,7 @@ class DockerSummary:
     def system_info(self) -> SysInfo:
         if self._sys_info:
             return self._sys_info
-        _, arch = self.exec(["uname","-m"])
+        _, arch = self.exec(["uname", "-m"])
         _, user = self.exec("whoami")
         install_system = Installer.NONE
         has_apt = self.exec(["which", "apt-get"])[0] == 0
@@ -223,9 +232,12 @@ class DockerSummary:
         if has_apk:
             install_system = Installer.APK
 
-        interperter = self.exec([
-            "ls", "/lib",
-        ])[1].splitlines()
+        interperter = self.exec(
+            [
+                "ls",
+                "/lib",
+            ]
+        )[1].splitlines()
 
         installed = {
             key: self.exec(["which", key])[0] == 0
@@ -233,7 +245,7 @@ class DockerSummary:
         }
 
         envs = {
-            line.split("=")[0]: line.split('=')[1].strip()
+            line.split("=")[0]: line.split("=")[1].strip()
             for line in self.exec(["printenv"])[1].splitlines()
         }
 
@@ -256,53 +268,46 @@ class DockerSummary:
             if code:
                 print(res)
                 raise RuntimeError("Failed")
-            self.exec(["apt-get","install", "-y", "apt-utils"])
+            self.exec(["apt-get", "install", "-y", "apt-utils"])
             return
 
         self.exec(["apk", "update"])
 
     def link_nvim(self):
         print("Link NVIM")
-        self.exec([
-            "ln", "-sf",
-            self.system_info().home() + "/neovim/build/bin/nvim",
-            "/bin/nvim"
-        ])
-        code, result = self.exec([
-            "nvim", "--version"
-        ])
+        self.exec(
+            [
+                "ln",
+                "-sf",
+                self.system_info().home() + "/neovim/build/bin/nvim",
+                "/bin/nvim",
+            ]
+        )
+        code, result = self.exec(["nvim", "--version"])
         print("NVIM installed", code, result)
 
     def sync_config(self, overwrite: bool = True):
         sys_info = self.system_info()
         local_home = os.environ["HOME"]
         config_folder = sys_info.home() + "/.config"
-        self.exec([
-            "mkdir", "-p", config_folder
-        ])
-        self.exec([
-            "mkdir", "-p", sys_info.home() + '/.local/share/nvim'
-        ])
+        self.exec(["mkdir", "-p", config_folder])
+        self.exec(["mkdir", "-p", sys_info.home() + "/.local/share/nvim"])
         if not overwrite and self.file_exists(config_folder + "/nvim", is_dir=True):
             return
 
         print("Removing .config/nvim")
-        self.exec([
-            "rm", "-rf", config_folder + "/nvim"
-        ])
+        self.exec(["rm", "-rf", config_folder + "/nvim"])
         print("Remove .local/share/nvim")
-        self.exec([
-            "rm", "-rf", sys_info.home() + '/.local/share/nvim'
-        ])
+        self.exec(["rm", "-rf", sys_info.home() + "/.local/share/nvim"])
         print("Syncing .config/nvim")
         self.copy(
-            to_docker=True, 
+            to_docker=True,
             from_path=local_home + "/.config/nvim",
             to_path=config_folder,
         )
         print("Syncing .config/github-copilot")
         self.copy(
-            to_docker=True, 
+            to_docker=True,
             from_path=local_home + "/.config/github-copilot",
             to_path=config_folder,
         )
@@ -317,9 +322,15 @@ class DockerSummary:
         install_system = sys_info.install_system
         packages = [e for e in packages if e not in self._skip_installs.split(",")]
 
-        command = [
-            "apt-get", "install", "-y",
-        ] if install_system == Installer.APT else ["apk", "add"]
+        command = (
+            [
+                "apt-get",
+                "install",
+                "-y",
+            ]
+            if install_system == Installer.APT
+            else ["apk", "add"]
+        )
         if lean and install_system == "apt-get":
             command.append("--no-install-recommends")
 
@@ -329,12 +340,15 @@ class DockerSummary:
         if code != 0:
             raise RuntimeError(f"Intall failed {packages}: {output=}")
 
-
     def ensure_deps(self):
         self.install_setup()
-        self.install([
-            "wget", "git", "ripgrep",
-        ])
+        self.install(
+            [
+                "wget",
+                "git",
+                "ripgrep",
+            ]
+        )
         sys_info = self.system_info()
 
         if not sys_info.installed["node"]:
@@ -348,27 +362,34 @@ class DockerSummary:
         if not overwrite and sys_info.installed["nvim"]:
             return
         if sys_info.install_system == Installer.APK:
-            self.install([
-                "build-base", "coreutils", "unzip","gettext-tiny-dev"
-            ])
-        self.install([
-            "gcc", "g++", "curl", "unzip", "make", "gettext", "cmake",
-            "libtool",
-        ])
+            self.install(["build-base", "coreutils", "unzip", "gettext-tiny-dev"])
+        self.install(
+            [
+                "gcc",
+                "g++",
+                "curl",
+                "unzip",
+                "make",
+                "gettext",
+                "cmake",
+                "libtool",
+            ]
+        )
         zip_location = "/tmp/neovim.zip"
         if not self.file_exists(zip_location, is_dir=False):
             print(f"Downloading Neovim {version=}")
-            code, _ = self.exec([
-                "curl", "-L", "-o",
-                zip_location,
-                f"https://github.com/neovim/neovim/archive/refs/tags/{version}.zip"
-            ])
-
+            code, _ = self.exec(
+                [
+                    "curl",
+                    "-L",
+                    "-o",
+                    zip_location,
+                    f"https://github.com/neovim/neovim/archive/refs/tags/{version}.zip",
+                ]
+            )
 
         if not self.file_exists(f"/tmp/neovim-{version}", is_dir=True):
-            code, _ = self.exec([
-                "unzip", "-oq", zip_location, "-d","/tmp/"
-            ])
+            code, _ = self.exec(["unzip", "-oq", zip_location, "-d", "/tmp/"])
             if code != 0:
                 raise RuntimeError("Unzip failed")
 
@@ -439,20 +460,13 @@ class DockerSummary:
 
 
 class Docker:
-
     @staticmethod
     def ps(name: str | None = None) -> List[DockerSummary]:
-        _, data = _run([
-            "docker",
-            "ps",
-            "--format",
-            "json"
-        ])
+        _, data = _run(["docker", "ps", "--format", "json"])
         results = [DockerSummary.from_json_string(row) for row in data.splitlines()]
         if name:
             results = [e for e in results if name in e.names]
         return results
-
 
 
 def _get_docker_process(container_name: str) -> Optional[DockerSummary]:
@@ -464,7 +478,8 @@ def _get_docker_process(container_name: str) -> Optional[DockerSummary]:
         container_name = input("\n")
 
     processes = [
-        pro for i, pro in enumerate(processes) 
+        pro
+        for i, pro in enumerate(processes)
         if container_name in pro.names or str(i) == container_name
     ]
     if len(processes) != 1:
@@ -496,14 +511,16 @@ def run_dnvim() -> None:
     docker.sync_config(overwrite=args.sync_config)
     info = docker.system_info()
     if not args.build and not info.installed["nvim"]:
-        desc = registry.find(BuildDesc(
-            arch=info.arch,
-            interperter="ld_musl_aarch64" if info.ld_musl_aarch64 else "",
-            image_name=docker.names,
-            version="",
-            luajit="",
-            compile_details="",
-        ))
+        desc = registry.find(
+            BuildDesc(
+                arch=info.arch,
+                interperter="ld_musl_aarch64" if info.ld_musl_aarch64 else "",
+                image_name=docker.names,
+                version="",
+                luajit="",
+                compile_details="",
+            )
+        )
         if not desc:
             raise RuntimeError("Nvim is not installed and not build match: use -b")
 
@@ -540,6 +557,7 @@ def run_list():
     print("")
     registry.list()
 
+
 def _run_copy() -> None:
     """Watch the file /tmp/copy.txt for changes and run pbcopy on the contents."""
     file_path = Path("/tmp/copy.txt")
@@ -553,7 +571,7 @@ def _run_copy() -> None:
                 value = fp.read().strip()
                 print("contents changed")
                 print(value)
-                print("-"*10)
+                print("-" * 10)
                 subprocess.run(["pbcopy"], input=value.encode("utf-8"))
         time.sleep(0.5)
 
@@ -568,7 +586,9 @@ def _run_docker_copy(container_id: str) -> None:
     while True:
         time.sleep(0.5)
 
-        exit_code, content = container.exec(["stat", "--format", "'%Y'", "/tmp/copy.txt"])
+        exit_code, content = container.exec(
+            ["stat", "--format", "'%Y'", "/tmp/copy.txt"]
+        )
         if exit_code != 0:
             continue
         this_change = int(content.strip("'"))
@@ -583,7 +603,8 @@ def _run_docker_copy(container_id: str) -> None:
         subprocess.run(["pbcopy"], input=content.encode("utf-8"))
         print("Copied to clipboard")
         print(content)
-        print("-"*10)
+        print("-" * 10)
+
 
 def run_copy() -> None:
     args = parser.parse_args()
@@ -611,6 +632,7 @@ def main() -> None:
     run_dnvim()
     exit(0)
 
+
 parser = argparse.ArgumentParser(
     prog="dvnim",
     description="Handle creating Neovim setup within Docker Containers",
@@ -622,9 +644,11 @@ parser.add_argument(
     nargs="?",
 )
 parser.add_argument("--sync-config", action="store_true")
-parser.add_argument("-b","--build", action="store_true")
-parser.add_argument("-s","--store", action="store_true")
-parser.add_argument("-n", "--name", help="Docker name if not provided as the first arg", default="")
+parser.add_argument("-b", "--build", action="store_true")
+parser.add_argument("-s", "--store", action="store_true")
+parser.add_argument(
+    "-n", "--name", help="Docker name if not provided as the first arg", default=""
+)
 parser.add_argument("--skip-deps", default="")
 
 if __name__ == "__main__":
