@@ -1,12 +1,16 @@
 import argparse
+import contextlib
+import sys
+import time
 import os
 import enum
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
 import subprocess
-from typing import List, Dict, Optional, Tuple, Union
+from typing import Generator, List, Dict, Optional, Tuple
 import functools
+
 
 BUILDS_FOLDER = Path(__file__).parent / "builds"
 BUILDS_FOLDER.mkdir(parents=True, exist_ok=True)
@@ -123,6 +127,7 @@ class DockerSummary:
     ports: str
     payload: Dict
     _sys_info: Optional[SysInfo] = None
+    _skip_installs: str = ""
     
     def __hash__(self) -> int:
         return id(self)
@@ -138,19 +143,43 @@ class DockerSummary:
             payload=data,
         )
 
-    def docker_enter(self):
-        try:
-            subprocess.check_call([
-                "docker", "exec",
-                "-it",
-                self.id,
-                "bash" if self.system_info().installed["bash"] else "sh",
-            ])
-        except subprocess.CalledProcessError as err:
-            if err.returncode == 130:
-                print("Safely exited")
-                return
-            raise
+    @contextlib.contextmanager
+    def _ensure_copy_wather_process(self) -> Generator[None,None,None]:
+        command = [sys.executable, __file__, "copy", "-n", self.id]
+        if not subprocess.run([
+            "pgrep", "-f", " ".join(command)
+        ]).returncode: 
+            print("Copy watcher already running")
+            yield None
+            return None
+
+        print("Starting copy watcher")
+        copy_p = subprocess.Popen(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        yield None
+        if copy_p.poll() is None:
+            print("Killing copy watcher")
+            copy_p.terminate()
+
+
+
+    def enter(self):
+        with self._ensure_copy_wather_process():
+            try:
+                subprocess.check_call([
+                    "docker", "exec",
+                    "-it",
+                    self.id,
+                    "bash" if self.system_info().installed["bash"] else "sh",
+                ])
+            except subprocess.CalledProcessError as err:
+                if err.returncode in (130, 127):
+                    print("Safely exited")
+                    return
+                raise
 
     def exec(self, command: str | List[str], workingdir: str = "") -> Tuple[int, str]:
         if isinstance(command, str):
@@ -177,6 +206,7 @@ class DockerSummary:
         ]
         value = args[3 if to_docker else 2]
         args[3 if to_docker else 2] = self.id + ":" + value
+        print(args)
         _run(args)
 
     def system_info(self) -> SysInfo:
@@ -256,29 +286,36 @@ class DockerSummary:
         if not overwrite and self.file_exists(config_folder + "/nvim", is_dir=True):
             return
 
-        print("Syncing .config/nvim")
+        print("Removing .config/nvim")
         self.exec([
             "rm", "-rf", config_folder + "/nvim"
         ])
+        print("Remove .local/share/nvim")
         self.exec([
             "rm", "-rf", sys_info.home() + '/.local/share/nvim'
         ])
+        print("Syncing .config/nvim")
         self.copy(
             to_docker=True, 
             from_path=local_home + "/.config/nvim",
-            to_path=config_folder + "/nvim",
+            to_path=config_folder,
         )
+        print("Syncing .config/github-copilot")
         self.copy(
-            to_docker=True,
-            from_path=local_home + '/.local/share/nvim',
-            to_path=sys_info.home() + '/.local/share/nvim',
+            to_docker=True, 
+            from_path=local_home + "/.config/github-copilot",
+            to_path=config_folder,
         )
-        # self.exec(["rm", "-rf", config_folder + "/nvim/lazy-lock.json"])
+        return
+
+    def set_skips(self, skips: str):
+        self._skip_installs = skips
 
     def install(self, packages: List[str], lean: bool = False):
         self.install_setup()
         sys_info = self.system_info()
         install_system = sys_info.install_system
+        packages = [e for e in packages if e not in self._skip_installs.split(",")]
 
         command = [
             "apt-get", "install", "-y",
@@ -286,8 +323,9 @@ class DockerSummary:
         if lean and install_system == "apt-get":
             command.append("--no-install-recommends")
 
+        print("  installing  (this can take a while)... ", packages)
         code, output = self.exec(command + packages)
-        print("Installed ", packages, code)
+        print("  installed ", packages)
         if code != 0:
             raise RuntimeError(f"Intall failed {packages}: {output=}")
 
@@ -309,9 +347,13 @@ class DockerSummary:
         sys_info = self.system_info()
         if not overwrite and sys_info.installed["nvim"]:
             return
+        if sys_info.install_system == Installer.APK:
+            self.install([
+                "build-base", "coreutils", "unzip","gettext-tiny-dev"
+            ])
         self.install([
-            "gcc", "g++"
-            "curl", "unzip", "make", "gettext", "cmake",
+            "gcc", "g++", "curl", "unzip", "make", "gettext", "cmake",
+            "libtool",
         ])
         zip_location = "/tmp/neovim.zip"
         if not self.file_exists(zip_location, is_dir=False):
@@ -341,7 +383,6 @@ class DockerSummary:
             [
                 "make",
                 f'CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX={neovim_dir}"',
-                "install",
             ],
             workingdir=neovim_dir,
         )
@@ -414,16 +455,8 @@ class Docker:
 
 
 
-
-
-        
-
-def run_dnvim() -> None:
+def _get_docker_process(container_name: str) -> Optional[DockerSummary]:
     processes = Docker.ps()
-    args = parser.parse_args()
-    registry = Registry()
-    registry.load()
-    container_name = args.container_name
     if not container_name:
         print("Pick a conatiner")
         for i, p in enumerate(processes):
@@ -434,11 +467,31 @@ def run_dnvim() -> None:
         pro for i, pro in enumerate(processes) 
         if container_name in pro.names or str(i) == container_name
     ]
-    if not processes:
-        print("Couldn't find container ", container_name)
+    if len(processes) != 1:
+        print("Couldn't find unique container ", container_name)
         print([p.names for p in processes])
-        return 
+        return None
     docker = processes[0]
+    return docker
+
+
+def enter_docker() -> None:
+    args = parser.parse_args()
+    docker = _get_docker_process(args.name)
+    if not docker:
+        return
+    docker.enter()
+
+
+def run_dnvim() -> None:
+    args = parser.parse_args()
+    registry = Registry()
+    registry.load()
+    container_name = args.container_name or args.name
+    docker = _get_docker_process(container_name)
+    if not docker:
+        return
+    docker.set_skips(args.skip_deps or "")
     docker.ensure_deps()
     docker.sync_config(overwrite=args.sync_config)
     info = docker.system_info()
@@ -477,7 +530,7 @@ def run_dnvim() -> None:
     if args.store:
         return
     docker.link_nvim()
-    docker.docker_enter()
+    docker.enter()
 
 
 def run_list():
@@ -487,12 +540,72 @@ def run_list():
     print("")
     registry.list()
 
+def _run_copy() -> None:
+    """Watch the file /tmp/copy.txt for changes and run pbcopy on the contents."""
+    file_path = Path("/tmp/copy.txt")
+    # ensure the file file_exists
+    file_path.touch(exist_ok=True)
+    last_change = file_path.stat().st_mtime
+    while True:
+        if file_path.stat().st_mtime != last_change:
+            last_change = file_path.stat().st_mtime
+            with open(file_path, "r") as fp:
+                value = fp.read().strip()
+                print("contents changed")
+                print(value)
+                print("-"*10)
+                subprocess.run(["pbcopy"], input=value.encode("utf-8"))
+        time.sleep(0.5)
+
+
+def _run_docker_copy(container_id: str) -> None:
+    """exec against a running docker checking for changes in /tmp/copy.txt and running pbcopy."""
+    container = next((cont for cont in Docker.ps() if cont.id == container_id), None)
+    if not container:
+        return
+    print("Listening for changes in /tmp/copy.txt")
+    last_change = 0
+    while True:
+        time.sleep(0.5)
+
+        exit_code, content = container.exec(["stat", "--format", "'%Y'", "/tmp/copy.txt"])
+        if exit_code != 0:
+            continue
+        this_change = int(content.strip("'"))
+        if last_change == this_change:
+            continue
+        last_change = this_change
+        if last_change == 0:
+            continue
+        exit_code, content = container.exec(["cat", "/tmp/copy.txt"])
+        if exit_code != 0:
+            continue
+        subprocess.run(["pbcopy"], input=content.encode("utf-8"))
+        print("Copied to clipboard")
+        print(content)
+        print("-"*10)
+
+def run_copy() -> None:
+    args = parser.parse_args()
+    container_id = args.name
+    if not container_id:
+        return _run_copy()
+    _run_docker_copy(container_id)
+
 
 def main() -> None:
     args = parser.parse_args()
     container_name = args.container_name
+    if container_name == "copy":
+        run_copy()
+        return exit(0)
+
     if container_name == "list":
         run_list()
+        return exit(0)
+
+    if container_name == "enter":
+        enter_docker()
         return exit(0)
 
     run_dnvim()
@@ -511,6 +624,8 @@ parser.add_argument(
 parser.add_argument("--sync-config", action="store_true")
 parser.add_argument("-b","--build", action="store_true")
 parser.add_argument("-s","--store", action="store_true")
+parser.add_argument("-n", "--name", help="Docker name if not provided as the first arg", default="")
+parser.add_argument("--skip-deps", default="")
 
 if __name__ == "__main__":
     main()
