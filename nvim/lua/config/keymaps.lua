@@ -10,19 +10,45 @@ vim.keymap.set("n", "<leader>q", function()
   end
 end, { desc = "Close all unnamed buffers", remap = true })
 
-vim.api.nvim_create_user_command("Fshell", function(opts)
+local function fshell_command(opts)
+  local range_content = vim.fn.getline(vim.fn.getpos("'<")[2], vim.fn.getpos("'>")[2])
+  local range_value = table.concat(range_content, "\n")
   local command = table.concat(opts.fargs, " ")
+  -- if command contains "$r(ange)" replace it with the range content
+  if range_value ~= "" then
+    command = command:gsub("%$range", vim.fn.shellescape(range_value))
+  end
+  if command == "" then
+    command = range_value
+    return
+  end
+
   local buf_name = vim.api.nvim_buf_get_name(0)
   if buf_name ~= "" then
     vim.cmd(":enew")
   end
-  vim.cmd(": % ! " .. command)
-end, { nargs = "*" })
+  -- get the current active buffer
+  local buffer = vim.api.nvim_get_current_buf()
+  local function handle_output(job_id, data, event)
+    if event == "stdout" then
+      -- Append the output to a buffer
+      vim.api.nvim_buf_set_lines(buffer, -1, -1, false, data)
+    end
+  end
+  local job_id = vim.fn.jobstart(command, {
+    on_stdout = handle_output,
+    on_strderr = handle_output,
+    stderr_buffered = false,
+    stderr_buffer = buffer,
+    stdout_buffered = false,
+    stdout_buffer = buffer,
+  })
 
-vim.api.nvim_create_user_command("Fsh", function(opts)
-  local command = table.concat(opts.fargs, " ")
-  vim.cmd(":Fshell " .. command)
-end, { nargs = "*" })
+  -- vim.cmd(": % ! " .. command)
+end
+
+vim.api.nvim_create_user_command("Fshell", fshell_command, { range = true, nargs = "*" })
+vim.api.nvim_create_user_command("Fsh", fshell_command, { range = true, nargs = "*" })
 
 vim.api.nvim_create_user_command("Fscript", function(opts)
   local cwd = vim.fn.getcwd()
