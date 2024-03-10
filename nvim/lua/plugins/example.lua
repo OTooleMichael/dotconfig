@@ -1,5 +1,18 @@
 return {
   {
+    "OTooleMichael/dnvim",
+    --dir = "~/lua/dnvim",
+    config = function()
+      require("dnvim").setup({
+        install_alias = true,
+        docker = {
+          copy_watcher = true,
+          copy_watcher_registries = { "p", "o" },
+        },
+      })
+    end,
+  },
+  {
     "echasnovski/mini.surround",
     keys = function(_, keys)
       local plugin = require("lazy.core.config").spec.plugins["mini.surround"]

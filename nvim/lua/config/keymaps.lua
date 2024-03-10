@@ -67,6 +67,18 @@ end
 vim.api.nvim_create_user_command("Fshell", fshell_command, { range = true, nargs = "*" })
 vim.api.nvim_create_user_command("Fsh", fshell_command, { range = true, nargs = "*" })
 
+vim.api.nvim_create_user_command("Xfile", function(opts)
+  -- get the current active buffer file name
+  local file = vim.fn.expand("%")
+  -- if there is no name or it doesnt end in .py, then returns
+  if file == "" or not file:match("%.py$") then
+    return
+  end
+  -- python -u -m $(echo "alvin_sql/managed_resources/loading/__init__.py" | sed 's/\.py$//; s/\//./g')
+  local py_module_name = file:gsub("%.py$", ""):gsub("/", ".")
+  vim.cmd(":Fsh python3 -u -m " .. py_module_name)
+end, { nargs = "*" })
+
 vim.api.nvim_create_user_command("Fscript", function(opts)
   local cwd = vim.fn.getcwd()
   local command = table.concat(opts.fargs, " ")
@@ -112,13 +124,14 @@ vim.keymap.set("n", 'gs"', 'gsaiw"', { remap = true })
 vim.keymap.set("n", "gs'", "gsaiw'", { remap = true })
 vim.keymap.set("n", "<leader>o", "o<Esc>")
 vim.keymap.set("n", "<leader>O", "O<Esc>")
-vim.keymap.set("n", "<leader>rf", ":Fscript format<CR>")
 vim.keymap.set("n", "<leader>rt", ":Fscript test<CR>")
 vim.keymap.set("v", "<leader>re", ":Fsh<CR>")
 vim.keymap.set("n", "<leader>re", function()
+  ---@diagnostic disable-next-line: param-type-mismatch
   local current_line = vim.fn.getline(".")
   vim.cmd(":Fsh " .. current_line)
 end)
+vim.keymap.set("n", "<leader>rf", ":Xfile<CR>")
 vim.keymap.set("n", "<leader>gp", ":ChatGPT<CR>")
 vim.keymap.set("v", "<leader>gp", ":ChatGPTEditWithInstructions<CR>")
 

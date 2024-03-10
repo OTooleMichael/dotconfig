@@ -7,3 +7,4 @@ dnvim/builds
 aws
 .DS_Store
 nvim/**/secrets.lua
+__pycache__
