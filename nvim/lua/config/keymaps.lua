@@ -132,6 +132,7 @@ vim.keymap.set("n", "<leader>re", function()
   vim.cmd(":Fsh " .. current_line)
 end)
 vim.keymap.set("n", "<leader>rf", ":Xfile<CR>")
+vim.keymap.set("n", "<leader>ff", ":Tel find_files<CR>")
 vim.keymap.set("n", "<leader>gp", ":ChatGPT<CR>")
 vim.keymap.set("v", "<leader>gp", ":ChatGPTEditWithInstructions<CR>")
 
