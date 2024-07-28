@@ -16,14 +16,21 @@ alias zj-clean="zellij ls | awk '/EXITED/ {print $1}' | cstrip | xargs zellij d"
 source <(fzf --zsh);
 export FZF_COMPLETION_TRIGGER='**'
 alias fz="fzf --preview 'bat --color=always {}'"
+alias fzvim="fz | xargs nvim"
 
 docker-find() {
+    if [[ "$1" == "-" ]]; then
+      # passing "-" will list all containers and let you choose one
+      return docker ps | fzf | awk '{print $1}'
+    fi
     docker ps -q -f "name=$1"
 }
+
 docker-enter() {
     _COMMAND=${2:-bash}
-    docker exec -it $(docker ps -q -f "name=$1") $_COMMAND
+    docker exec -it $(docker-find $1) $_COMMAND
 }
+
 alias denter='docker-enter'
 alias dfind='docker-find'
 
@@ -34,7 +41,7 @@ copy-docker() {
 alias dcopy='copy-docker'
 
 autoload -U colors && colors
-PROMPT="%d%: "
+PROMPT="%~%: "
 alias cstrip='sed -r "s/\x1B\[([0-9]{1,3}(;[0-9]{1,2};?)?)?[mGK]//g"'
 
 alias dnvim="nvim --headless -n -c 'lua require(\"dnvim\").cli()' -- " #dnvim-alias
