@@ -1,7 +1,6 @@
 keybinds {
     unbind "Ctrl o"
     normal {
-        bind "Alt c" { Copy; }
         bind "Alt s" {
             LaunchOrFocusPlugin "zellij:session-manager" {
                 floating true
@@ -19,10 +18,10 @@ keybinds {
     }
     resize {
         bind "Ctrl n" { SwitchToMode "Normal"; }
-        bind "h" "h" { Resize "Increase Left"; }
-        bind "j" "j" { Resize "Increase Down"; }
-        bind "k" "k" { Resize "Increase Up"; }
-        bind "l" "l" { Resize "Increase Right"; }
+        bind "h" { Resize "Increase Left"; }
+        bind "j" { Resize "Increase Down"; }
+        bind "k" { Resize "Increase Up"; }
+        bind "l" { Resize "Increase Right"; }
         bind "H" { Resize "Decrease Left"; }
         bind "J" { Resize "Decrease Down"; }
         bind "K" { Resize "Decrease Up"; }
@@ -32,10 +31,10 @@ keybinds {
     }
     pane {
         bind "Ctrl p" { SwitchToMode "Normal"; }
-        bind "h" "h" { MoveFocus "Left"; }
-        bind "l" "l" { MoveFocus "Right"; }
-        bind "j" "j" { MoveFocus "Down"; }
-        bind "k" "k" { MoveFocus "Up"; }
+        bind "h" { MoveFocus "Left"; }
+        bind "l" { MoveFocus "Right"; }
+        bind "j" { MoveFocus "Down"; }
+        bind "k" { MoveFocus "Up"; }
         bind "p" { SwitchFocus; }
         bind "n" { NewPane; SwitchToMode "Normal"; }
         bind "d" { NewPane "Up"; SwitchToMode "Normal"; }
@@ -51,16 +50,16 @@ keybinds {
         bind "Ctrl h" { SwitchToMode "Normal"; }
         bind "n" "Tab" { MovePane; }
         bind "p" { MovePaneBackwards; }
-        bind "h" "h" { MovePane "Left"; }
-        bind "j" "j" { MovePane "Down"; }
-        bind "k" "k" { MovePane "Up"; }
-        bind "l" "l" { MovePane "Right"; }
+        bind "h" { MovePane "Left"; }
+        bind "j" { MovePane "Down"; }
+        bind "k" { MovePane "Up"; }
+        bind "l" { MovePane "Right"; }
     }
     tab {
         bind "Ctrl t" { SwitchToMode "Normal"; }
         bind "r" { SwitchToMode "RenameTab"; TabNameInput 0; }
-        bind "h" "h" "k" "k" { GoToPreviousTab; }
-        bind "l" "l" "j" "j" { GoToNextTab; }
+        bind "h" { GoToPreviousTab; }
+        bind "l" { GoToNextTab; }
         bind "n" { NewTab; SwitchToMode "Normal"; }
         bind "x" { CloseTab; SwitchToMode "Normal"; }
         bind "s" { ToggleActiveSyncTab; SwitchToMode "Normal"; }
@@ -83,22 +82,20 @@ keybinds {
         bind "e" { EditScrollback; SwitchToMode "Normal"; }
         bind "s" { SwitchToMode "EnterSearch"; SearchInput 0; }
         bind "Ctrl c" { ScrollToBottom; SwitchToMode "Normal"; }
-        bind "j" "Down" { ScrollDown; }
-        bind "k" "Up" { ScrollUp; }
-        bind "Ctrl f" "PageDown" "l" "l" { PageScrollDown; }
-        bind "Ctrl b" "PageUp" "h" "h" { PageScrollUp; }
+        bind "j" { ScrollDown; }
+        bind "k" { ScrollUp; }
+        bind "l" { PageScrollDown; }
+        bind "h" { PageScrollUp; }
         bind "d" { HalfPageScrollDown; }
         bind "u" { HalfPageScrollUp; }
-        // uncomment this and adjust key if using copy_on_select=false
-        bind "Alt c" { Copy; }
     }
     search {
         bind "Ctrl s" { SwitchToMode "Normal"; }
         bind "Ctrl c" { ScrollToBottom; SwitchToMode "Normal"; }
-        bind "j" "j" { ScrollDown; }
-        bind "k" "k" { ScrollUp; }
-        bind "Ctrl f" "PageDown" "l" "l" { PageScrollDown; }
-        bind "Ctrl b" "PageUp" "h" "h" { PageScrollUp; }
+        bind "j" { ScrollDown; }
+        bind "k" { ScrollUp; }
+        bind "l" { PageScrollDown; }
+        bind "h" { PageScrollUp; }
         bind "d" { HalfPageScrollDown; }
         bind "u" { HalfPageScrollUp; }
         bind "n" { Search "down"; }
@@ -145,10 +142,6 @@ keybinds {
         bind "l" { MoveFocus "Right"; SwitchToMode "Normal"; }
         bind "j" { MoveFocus "Down"; SwitchToMode "Normal"; }
         bind "k" { MoveFocus "Up"; SwitchToMode "Normal"; }
-        bind "h" { MoveFocus "Left"; SwitchToMode "Normal"; }
-        bind "l" { MoveFocus "Right"; SwitchToMode "Normal"; }
-        bind "j" { MoveFocus "Down"; SwitchToMode "Normal"; }
-        bind "k" { MoveFocus "Up"; SwitchToMode "Normal"; }
         bind "o" { FocusNextPane; }
         bind "d" { Detach; }
         bind "Space" { NextSwapLayout; }
@@ -158,10 +151,10 @@ keybinds {
         bind "Ctrl g" { SwitchToMode "Locked"; }
         bind "Ctrl q" { Quit; }
         bind "Alt n" { NewPane; }
-        bind "Alt h" "Alt h" { MoveFocusOrTab "Left"; }
-        bind "Alt l" "Alt l" { MoveFocusOrTab "Right"; }
-        bind "Alt j" "Alt j" { MoveFocus "Down"; }
-        bind "Alt k" "Alt k" { MoveFocus "Up"; }
+        bind "Alt h" { MoveFocusOrTab "Left"; }
+        bind "Alt l" { MoveFocusOrTab "Right"; }
+        bind "Alt j" { MoveFocus "Down"; }
+        bind "Alt k" { MoveFocus "Up"; }
         bind "Alt =" "Alt +" { Resize "Increase"; }
         bind "Alt -" { Resize "Decrease"; }
         bind "Alt [" { PreviousSwapLayout; }
@@ -216,20 +209,8 @@ plugins {
 //
 // simplified_ui true
 
-// Choose the path to the default shell that zellij will use for opening new panes
-// Default: $SHELL
-//
-// default_shell "fish"
-
-// Choose the path to override cwd that zellij will use for opening new panes
-//
 default_cwd ""
 pane_frames false
-// Define color themes for Zellij
-// For more examples, see: https://github.com/zellij-org/zellij/tree/main/example/themes
-// Once these themes are defined, one of them should to be selected in the "theme" section of this file
-// The name of the default layout to load on startup
-//
 default_layout "compact";
 default_mode "normal";
 scroll_buffer_size 10000;
@@ -251,13 +232,12 @@ copy_command "pbcopy"                     // osx
 //   - system (default)
 //   - primary
 //
-copy_clipboard "primary"
+copy_clipboard "system"
 
 // Enable or disable automatic copy (and clear) of selection when releasing mouse
 // Default: true
 //
 copy_on_select false
-
 scrollback_editor "/opt/homebrew/bin/nvim"
 
 // When attaching to an existing session with other users,
