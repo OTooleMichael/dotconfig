@@ -17,6 +17,9 @@ return {
     version = "6e5c78ebc9936ca74add66bda22c566f951b6ee5",
     opts = {
       servers = {
+        inlay_hints = {
+          enabled = false,
+        },
         basedpyright = {
           typeCheckingMode = "standard",
         },

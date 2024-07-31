@@ -66,6 +66,15 @@ end
 
 vim.api.nvim_create_user_command("Fshell", fshell_command, { range = true, nargs = "*" })
 vim.api.nvim_create_user_command("Fsh", fshell_command, { range = true, nargs = "*" })
+vim.api.nvim_create_user_command("Prune", function(opts)
+  local command = stripWhitespace(table.concat(opts.fargs, " "))
+  if command == "" then
+    command = "-50"
+  end
+  if string.sub(command, 1, 1) == "-" then
+    vim.cmd(":1," .. command .. "d")
+  end
+end, { range = false, nargs = "*" })
 
 vim.api.nvim_create_user_command("Xfile", function(opts)
   -- get the current active buffer file name
@@ -120,8 +129,12 @@ end)
 vim.keymap.set("i", "ø", function()
   require("copilot.suggestion").accept_word()
 end)
+
+vim.keymap.set("n", "<leader>P", ":Prune<CR>")
+vim.keymap.set("n", "<leader>Q", ":q!<CR>")
 vim.keymap.set("n", 'gs"', 'gsaiw"', { remap = true })
 vim.keymap.set("n", "gs'", "gsaiw'", { remap = true })
+vim.keymap.set("n", "<leader>ss", ":%s/\\v")
 vim.keymap.set("n", "<leader>o", "o<Esc>")
 vim.keymap.set("n", "<leader>O", "O<Esc>")
 vim.keymap.set("n", "<leader>rt", ":Fscript test<CR>")
