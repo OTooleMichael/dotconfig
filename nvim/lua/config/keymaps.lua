@@ -145,7 +145,29 @@ vim.keymap.set("n", "<leader>re", function()
   vim.cmd(":Fsh " .. current_line)
 end)
 vim.keymap.set("n", "<leader>rf", ":Xfile<CR>")
-vim.keymap.set("n", "<leader>ff", ":Tel find_files<CR>")
+vim.keymap.set("n", "<leader>ff", ":Telescope find_files<CR>")
+-- leader fF for find files including hidden and gitignored
+vim.keymap.set("n", "<leader>fF", function()
+  require("telescope.builtin").find_files({
+    find_command = { "rg", "--files", "--hidden", "--no-ignore", "--follow" },
+  })
+end)
+-- leader fg live grep including hidden and gitignored
+vim.keymap.set("n", "<leader>f/", function()
+  require("telescope.builtin").live_grep({
+    vimgrep_arguments = {
+      "rg",
+      "--color=never",
+      "--no-heading",
+      "--with-filename",
+      "--line-number",
+      "--column",
+      "--smart-case",
+      "-u", -- thats the new thing
+    },
+  })
+end)
+
 vim.keymap.set("n", "<leader>gp", ":ChatGPT<CR>")
 vim.keymap.set("v", "<leader>gp", ":ChatGPTEditWithInstructions<CR>")
 

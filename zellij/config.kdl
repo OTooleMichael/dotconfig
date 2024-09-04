@@ -1,5 +1,7 @@
 keybinds {
     unbind "Ctrl o"
+    unbind "Ctrl n"
+    unbind "Ctrl p"
     normal {
         bind "Alt s" {
             LaunchOrFocusPlugin "zellij:session-manager" {
