@@ -5,3 +5,4 @@ vim.opt.relativenumber = true
 vim.g.lazyvim_python_lsp = "basedpyright"
 vim.g.root_spec = { "cwd" }
 vim.opt.exrc = true
+vim.o.background = "dark"

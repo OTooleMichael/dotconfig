@@ -8,3 +8,5 @@ aws
 .DS_Store
 nvim/**/secrets.lua
 __pycache__
+AWSVPNClient
+AWS VPN Client

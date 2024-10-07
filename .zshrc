@@ -43,6 +43,25 @@ fi
 
 alias source-rc="source ~/.zshrc"
 
+DOCKER_PATH=$(which docker)
+which docker-compose &> /dev/null
+_IS_COMPOSE=$?
+docker compose --version &> /dev/null
+_IS_COMPOSE_SUB=$?
+
+docker_() {
+  if [[ "$1" == "compose" ]]; then
+    shift
+    docker-compose "$@"
+  else
+    $DOCKER_PATH "$@"
+  fi
+}
+
+if [[ $_IS_COMPOSE -eq 0 && $_IS_COMPOSE_SUB -ne 0 ]]; then
+  alias docker='docker_'
+fi
+
 
 
 docker-find() {
