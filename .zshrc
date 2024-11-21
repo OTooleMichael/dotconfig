@@ -62,6 +62,15 @@ if [[ $_IS_COMPOSE -eq 0 && $_IS_COMPOSE_SUB -ne 0 ]]; then
   alias docker='docker_'
 fi
 
+git-sync() {
+  git checkout $(git branch | awk '/master|main/ {print $2}');
+  git stash;
+  git pull;
+  git stash pop;
+}
+
+alias git-sync="git-sync"
+
 
 
 docker-find() {
