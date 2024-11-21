@@ -62,16 +62,19 @@ if [[ $_IS_COMPOSE -eq 0 && $_IS_COMPOSE_SUB -ne 0 ]]; then
   alias docker='docker_'
 fi
 
-git-sync() {
-  git checkout $(git branch | awk '/master|main/ {print $2}');
+git-sync_() {
+  target_branch=$(git branch | awk '/master|main/ {print $NF}');
+  if [ -z "$target_branch" ]; then
+    echo "No master or main branch found."
+    return 1;
+  fi;
+  git checkout $target_branch;
   git stash;
   git pull;
   git stash pop;
 }
 
-alias git-sync="git-sync"
-
-
+alias git-sync="git-sync_"
 
 docker-find() {
     if [[ "$1" == "-" ]]; then
