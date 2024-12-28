@@ -139,11 +139,13 @@ keybinds clear-defaults=true {
         bind "Alt [" { PreviousSwapLayout; }
         bind "Alt ]" { NextSwapLayout; }
         bind "Alt h" { MoveFocusOrTab "left"; }
-        bind "Alt i" { MoveTab "left"; }
+        bind "Alt i" { MovePane "left"; }
+        bind "Alt tab" { MovePane; }
+        bind "Alt o" { MovePane "right"; }
         bind "Alt j" { MoveFocus "down"; }
         bind "Alt k" { MoveFocus "up"; }
         bind "Alt l" { MoveFocusOrTab "right"; }
-        bind "Alt n" { NewPane; }
+        bind "Alt n" { NewPane "right"; }
         bind "Alt s" {
             SwitchToMode "Locked"
             LaunchOrFocusPlugin "zellij:session-manager" {
