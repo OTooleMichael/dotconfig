@@ -145,7 +145,7 @@ keybinds clear-defaults=true {
         bind "Alt j" { MoveFocus "down"; }
         bind "Alt k" { MoveFocus "up"; }
         bind "Alt l" { MoveFocusOrTab "right"; }
-        bind "Alt n" { NewPane "right"; }
+        bind "Alt n" { NewPane; SwitchToMode "Locked"; }
         bind "Alt s" {
             SwitchToMode "Locked"
             LaunchOrFocusPlugin "zellij:session-manager" {
@@ -153,8 +153,8 @@ keybinds clear-defaults=true {
                 move_to_focused_tab true
             };
         }
-        bind "Alt e" { EditScrollback; SwitchToMode "Normal"; }
-        bind "Alt f" { ToggleFocusFullscreen; SwitchToMode "Normal"; }
+        bind "Alt e" { EditScrollback; SwitchToMode "Locked"; }
+        bind "Alt f" { ToggleFocusFullscreen; SwitchToMode "Locked"; }
     }
     shared_except "locked" "renametab" "renamepane" {
         bind "Ctrl g" { SwitchToMode "locked"; }
