@@ -67,59 +67,6 @@ return {
     },
   },
   {
-    "jackMort/ChatGPT.nvim",
-    event = "VeryLazy",
-    config = function()
-      local model = "gpt-4o"
-      require("chatgpt").setup({
-        -- load the API key from a file one folder above
-        api_key_cmd = "echo " .. require("secrets").get_secret("chatgpt"),
-        openai_params = {
-          model = model,
-          frequency_penalty = 0,
-          presence_penalty = 0,
-          max_tokens = 300,
-          temperature = 0,
-          top_p = 1,
-          n = 1,
-        },
-        openai_edit_params = {
-          model = model,
-          frequency_penalty = 0,
-          presence_penalty = 0,
-          temperature = 0,
-          top_p = 1,
-          n = 1,
-        },
-        edit_with_instructions = {
-          diff = false,
-          keymaps = {
-            close = "<C-c>",
-            accept = "<C-a>",
-            toggle_diff = "<C-d>",
-            toggle_settings = "<C-o>",
-          },
-        },
-        chat = {
-          keymaps = {
-            close = "<C-c>",
-            yank_last = "<C-y>",
-            yank_last_code = "<C-k>",
-            scroll_up = "<C-u>",
-            scroll_down = "<C-d>",
-            new_session = "<C-n>",
-            cycle_windows = "<Tab>",
-          },
-        },
-      })
-    end,
-    dependencies = {
-      "MunifTanjim/nui.nvim",
-      "nvim-lua/plenary.nvim",
-      "nvim-telescope/telescope.nvim",
-    },
-  },
-  {
     "zbirenbaum/copilot.lua",
     cmd = "Copilot",
     event = "InsertEnter",
