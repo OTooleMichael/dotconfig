@@ -76,19 +76,19 @@ local function curl_json(url, data, callback)
   return handle
 end
 
-local function ollama_request(prompt, context, model, callback)
+local function ollama_request(prompt, role, context, model, callback)
+  role = role or "User"
   if not context then
     prompt = table.concat({
-      "System: You are an AI answering users questions. The user is deeeply technical.",
-      "They are most often asking about programming.",
-      "You are expected to provide detailed, consice and accurate answers.",
-      "Where it makes sense stick to code.",
-      "User: ",
+      "System: You are a helpul Assistant. You are an expert in coding and communicate often with code.",
+      "You provide detailed, consice and accurate answers.",
+      "If provided a context message from the System reply ONLY with OK.",
+      role .. ": ",
     }, "\n") .. prompt
   else
-    prompt = "User: " .. prompt
+    prompt = role .. ": " .. prompt
   end
-  prompt = prompt .. "\nAI:"
+  prompt = prompt .. "\nAssistant:"
 
   local body = { model = model, prompt = prompt, stream = true, context = context }
   return curl_json("http://localhost:11434/api/generate", body, function(response, is_error)
@@ -104,7 +104,7 @@ local function ollama_request(prompt, context, model, callback)
 end
 
 -- Function to send a string to Ollama and stream to a buffer
-local function stream_ollama(prompt, state)
+local function stream_ollama(prompt, role, state)
   local buf_id = state.chat_buf
   local win_id = state.chat_win
   local think_lines = {}
@@ -112,10 +112,10 @@ local function stream_ollama(prompt, state)
   local think_i = 1
   local max_ticks = 6
   local rate = 10
-  return ollama_request(prompt, state.context, state.model, function(response, is_error)
+  return ollama_request(prompt, role, state.context, state.model, function(response, is_error)
     local i_ = response.response
     if response.done then
-      i_ = i_ .. "\n\n\n"
+      i_ = i_ .. "\n\n"
     end
     if i_ == "</think>" then
       thinking_finished = true
@@ -175,6 +175,7 @@ end
 
 local Models = {
   "deepseek-r1:1.5b",
+  "deepseek-r1:7b",
   "deepseek-r1:14b",
   "deepseek-r1:32b",
 }
@@ -271,19 +272,18 @@ local function on_enter()
     return
   end
   local model = nil
+  local role = "User"
   if input_lines[1]:match("^:ctx") then
+    role = "System"
     input_lines = {
       "This is a context message. It is not a question.",
-      "Repond only with 'OK!' for now. I'll ask questions later.",
-      "Below is the code file I'm working on.",
+      "Respond only with OK.",
+      "Below is the context containing the current code file.",
       "Remember this as context.",
-      "Respond only with 'OK!'",
-      "<code>",
+      "<context>",
       "expand:%",
-      "</code>",
-      "Remeber this, but respond only with 'OK!'",
-      "For this message I only need 'OK!' as confirmation.",
-      "Later I'll ask questions, however respond here only with 'OK!'",
+      "</context>",
+      "Store this context, but respond ONLY with OK",
     }
     model = State.model
     State.model = "deepseek-r1:1.5b"
@@ -349,7 +349,7 @@ local function on_enter()
     State.selected_range.sent = true
     prompt = selected_text .. "\n" .. prompt
   end
-  State.req_handle = stream_ollama(expand_pattern_in_string(prompt, State.curr_buf), State)
+  State.req_handle = stream_ollama(expand_pattern_in_string(prompt, State.curr_buf), role, State)
   State.model = model or State.model
 end
 
