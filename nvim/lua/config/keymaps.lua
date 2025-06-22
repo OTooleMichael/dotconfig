@@ -89,6 +89,25 @@ vim.api.nvim_create_user_command("Xfile", function(opts)
   vim.cmd(":Fsh python3 -u -m " .. py_module_name)
 end, { nargs = "*" })
 
+vim.keymap.set("n", "<leader>pp", function()
+  local path = vim.fn.expand("%:p")
+  vim.fn.setreg('"', path)
+  print("Copied full path: " .. path)
+end, { desc = "Copy full file path" })
+
+vim.keymap.set("n", "<leader>pN", function()
+  local name = vim.fn.expand("%:t")
+  vim.fn.setreg('"', name)
+  print("Copied file name: " .. name)
+end, { desc = "Copy file name" })
+
+vim.keymap.set("n", "<leader>pn", function()
+  local name_no_ext = vim.fn.expand("%:t:r")
+  vim.fn.setreg('"', name_no_ext)
+  print("Copied file name: " .. name_no_ext)
+  -- Function to copy the file name to the unnamed register
+end, { desc = "Copy file name without extension" })
+
 vim.api.nvim_create_user_command("Fscript", function(opts)
   local cwd = vim.fn.getcwd()
   local command = table.concat(opts.fargs, " ")
@@ -146,28 +165,6 @@ vim.keymap.set("n", "<leader>re", function()
   vim.cmd(":Fsh " .. current_line)
 end)
 vim.keymap.set("n", "<leader>rf", ":Xfile<CR>")
-vim.keymap.set("n", "<leader>ff", ":Telescope find_files<CR>")
--- leader fF for find files including hidden and gitignored
-vim.keymap.set("n", "<leader>fF", function()
-  require("telescope.builtin").find_files({
-    find_command = { "rg", "--files", "--hidden", "--no-ignore", "--follow" },
-  })
-end)
--- leader fg live grep including hidden and gitignored
-vim.keymap.set("n", "<leader>f/", function()
-  require("telescope.builtin").live_grep({
-    vimgrep_arguments = {
-      "rg",
-      "--color=never",
-      "--no-heading",
-      "--with-filename",
-      "--line-number",
-      "--column",
-      "--smart-case",
-      "-u", -- thats the new thing
-    },
-  })
-end)
 
 vim.keymap.set("v", "K", ":m '<-2<CR>gv=gv", { silent = true })
 vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv", { silent = true })
