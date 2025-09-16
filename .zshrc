@@ -76,24 +76,52 @@ git-sync_() {
 
 alias git-sync="git-sync_"
 
-docker-find() {
-    if [[ "$1" == "-" ]]; then
-      # passing "-" will list all containers and let you choose one
-      _LIST=$(docker ps | grep -v '^CONTAINER');
-      _PICKED=$(echo $_LIST | fzf);
-      echo $_PICKED | awk '{print $1}'
-      return
-    fi
-    docker ps -q -f "name=$1"
-}
 
 docker-enter() {
-    _COMMAND=${2:-bash}
-    docker exec -it $(docker-find $1) $_COMMAND
+    local container_pattern="$1"
+    local command="${2:-bash}"
+
+    if [[ -z "$container_pattern" ]]; then
+        # No pattern provided - use smart default, fallback to fzf
+        local container_id=$(docker-find f)
+        if [[ -z "$container_id" ]]; then
+            echo "No container found"
+            return 1
+        fi
+        docker exec -it "$container_id" "$command"
+        return $?
+    fi
+
+    # Pattern provided - find matching container
+    local container_id=$(docker-find f "$container_pattern" | head -1)
+    if [[ -z "$container_id" ]]; then
+        echo "Container matching '$container_pattern' not found"
+        return 1
+    fi
+    docker exec -it "$container_id" "$command"
+}
+
+docker-exec() {
+    local container_pattern="$1"
+    shift
+
+    if [[ -z "$container_pattern" ]]; then
+        echo "Usage: dexec <container_pattern> <command...>"
+        return 1
+    fi
+
+    local container_id=$(docker-find f "$container_pattern" | head -1)
+    if [[ -z "$container_id" ]]; then
+        echo "Container matching '$container_pattern' not found"
+        return 1
+    fi
+
+    docker exec -it "$container_id" "$@"
 }
 
 alias denter='docker-enter'
-alias dfind='docker-find'
+alias dexec='docker-exec'
+alias dfind='docker-find f'
 
 copy-docker() {
   docker_location="/tmp/dnvim_copy_watcher.txt"
@@ -122,4 +150,6 @@ on-port-fn() {
 }
 
 alias onport='on-port-fn'
+
+
 alias dnvim="nvim --headless -n -c 'lua require(\"dnvim\").cli()' -- " #dnvim-alias

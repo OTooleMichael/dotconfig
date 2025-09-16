@@ -11,3 +11,4 @@ nvim/**/secrets.lua
 __pycache__
 AWSVPNClient
 AWS VPN Client
+target

@@ -168,3 +168,21 @@ vim.keymap.set("n", "<leader>rf", ":Xfile<CR>")
 
 vim.keymap.set("v", "K", ":m '<-2<CR>gv=gv", { silent = true })
 vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv", { silent = true })
+
+vim.keymap.set("n", "<leader>cc", function()
+  local cursor_pos = vim.api.nvim_win_get_cursor(0)
+
+  vim.cmd([[%s/\s\+$//e]])
+
+  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+  while #lines > 1 and lines[#lines] == "" do
+    table.remove(lines)
+  end
+
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+
+  pcall(vim.api.nvim_win_set_cursor, 0, cursor_pos)
+
+  print("Cleaned trailing whitespace and fixed EOF")
+end, { desc = "Clean trailing whitespace and fix end-of-file" })
