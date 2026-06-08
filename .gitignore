@@ -3,6 +3,8 @@ github-copilot
 configstore
 nvim2
 dnvim/builds
+hcloud/
+fish/
 .aws
 aws
 gh
@@ -12,3 +14,7 @@ __pycache__
 AWSVPNClient
 AWS VPN Client
 target
+**/.claude/settings.local.json
+acli/
+slack-pull/
+prrr/

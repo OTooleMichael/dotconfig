@@ -1,0 +1,305 @@
+#!/usr/bin/env python3
+"""
+Harpoon-style Zellij session manager.
+
+Normal : a/s/d/f=jump  j/k=nav  Enter=open  m=mark-mode  /=search  r=refresh  q=quit
+Mark   : a/s/d/f=assign slot  Esc=cancel
+Search : type=filter  j/k=nav  Enter=open  Esc=cancel
+"""
+
+import curses
+import json
+import os
+import pathlib
+import re
+import subprocess
+import sys
+
+MARKS_FILE = pathlib.Path("~/.config/zellij/session-marks.json").expanduser()
+HOME = pathlib.Path.home()
+CURRENT = os.environ.get("ZELLIJ_SESSION_NAME", "")
+MARK_KEYS = list("asdf")
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+NORMAL, MARK, SEARCH = "normal", "mark", "search"
+
+# curses color pair indices
+CP_HEADER  = 1
+CP_FILLED  = 2
+CP_CURRENT = 3
+CP_DIM     = 4
+CP_SEL     = 5
+CP_BUSY    = 6
+CP_MODE    = 7
+
+
+# ── persistence ────────────────────────────────────────────────────────────────
+
+def load_marks():
+    if MARKS_FILE.exists():
+        try:
+            d = json.loads(MARKS_FILE.read_text())
+            return {k: d.get(k) for k in MARK_KEYS}
+        except Exception:
+            pass
+    return {k: None for k in MARK_KEYS}
+
+
+def save_marks(marks):
+    MARKS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    MARKS_FILE.write_text(json.dumps(marks, indent=2))
+
+
+# ── data fetching ──────────────────────────────────────────────────────────────
+
+def fetch_sessions():
+    r = subprocess.run(
+        ["zellij", "list-sessions", "--short"],
+        capture_output=True, text=True,
+    )
+    out = []
+    for line in r.stdout.strip().splitlines():
+        name = ANSI.sub("", line).split()[0] if line.strip() else ""
+        if name:
+            out.append(name)
+    return out
+
+
+def fetch_claude_status():
+    """Return {zellij_session_name: 'busy'|'waiting'|'idle'}."""
+    sessions_dir = pathlib.Path("~/.claude/sessions").expanduser()
+    if not sessions_dir.exists():
+        return {}
+
+    ps = subprocess.run(["ps", "-eo", "pid,ppid,args"], capture_output=True, text=True)
+    ppid, comm = {}, {}
+    for line in ps.stdout.strip().splitlines()[1:]:
+        p = line.split(None, 2)
+        if len(p) >= 3:
+            pid, par = int(p[0]), int(p[1])
+            ppid[pid] = par
+            comm[pid] = p[2]
+
+    def alive(pid):
+        try:
+            os.kill(pid, 0)
+            return True
+        except Exception:
+            return False
+
+    def zj_of(pid):
+        seen, cur = set(), pid
+        while cur and cur not in seen:
+            seen.add(cur)
+            c = comm.get(cur, "")
+            if "zellij" in c and "--server" in c:
+                return c.split("--server")[-1].strip().split()[-1].split("/")[-1]
+            cur = ppid.get(cur)
+        return None
+
+    RANK = {"busy": 2, "waiting": 1, "idle": 0}
+    result = {}
+    for f in sessions_dir.glob("*.json"):
+        try:
+            d = json.loads(f.read_text())
+            pid = d["pid"]
+            if not alive(pid):
+                continue
+            status = d.get("status", "idle")
+            zj = zj_of(pid)
+            if zj and RANK.get(status, 0) > RANK.get(result.get(zj, "idle"), 0):
+                result[zj] = status
+        except Exception:
+            pass
+    return result
+
+
+# ── UI helpers ─────────────────────────────────────────────────────────────────
+
+ICON = {"busy": "⚙", "waiting": "⌨", "idle": "·"}
+STATUS_COLOR = {"busy": CP_BUSY, "waiting": CP_CURRENT, "idle": CP_DIM}
+
+
+def addstr_safe(win, y, x, s, attr=0):
+    h, w = win.getmaxyx()
+    if y < 0 or y >= h:
+        return
+    s = s[: w - x - 1]
+    if not s:
+        return
+    try:
+        win.addstr(y, x, s, attr)
+    except curses.error:
+        pass
+
+
+# ── main ───────────────────────────────────────────────────────────────────────
+
+def main(scr):
+    curses.curs_set(0)
+    curses.start_color()
+    curses.use_default_colors()
+    curses.init_pair(CP_HEADER,  curses.COLOR_CYAN,    -1)
+    curses.init_pair(CP_FILLED,  curses.COLOR_GREEN,   -1)
+    curses.init_pair(CP_CURRENT, curses.COLOR_YELLOW,  -1)
+    curses.init_pair(CP_DIM,     -1,                   -1)
+    curses.init_pair(CP_SEL,     curses.COLOR_BLACK,   curses.COLOR_WHITE)
+    curses.init_pair(CP_BUSY,    curses.COLOR_RED,     -1)
+    curses.init_pair(CP_MODE,    curses.COLOR_MAGENTA, -1)
+
+    marks    = load_marks()
+    sessions = fetch_sessions()
+    claude   = fetch_claude_status()
+
+    mode    = NORMAL
+    query   = ""
+    cursor  = 0
+    msg     = ""
+    msg_ttl = 0
+
+    scr.timeout(100)
+
+    while True:
+        h, w = scr.getmaxyx()
+        scr.erase()
+        row = 0
+
+        # ── marks header ──────────────────────────────
+        addstr_safe(scr, row, 0, " MARKS", curses.color_pair(CP_HEADER) | curses.A_BOLD)
+        row += 1
+
+        for key in MARK_KEYS:
+            target = marks.get(key)
+            if target:
+                icon = ICON.get(claude.get(target, "idle"), "·")
+                marker = "◀" if target == CURRENT else " "
+                line = f" [{key}] {target:<26} {icon}  {marker}"
+                cp = CP_CURRENT if target == CURRENT else CP_FILLED
+                addstr_safe(scr, row, 0, line, curses.color_pair(cp))
+            else:
+                addstr_safe(scr, row, 0, f" [{key}] —",
+                            curses.color_pair(CP_DIM) | curses.A_DIM)
+            row += 1
+
+        addstr_safe(scr, row, 0, " " + "─" * max(0, w - 2),
+                    curses.color_pair(CP_DIM) | curses.A_DIM)
+        row += 1
+
+        # ── session list ──────────────────────────────
+        fs = (
+            [s for s in sessions if query.lower() in s.lower()]
+            if (mode == SEARCH and query)
+            else sessions[:]
+        )
+        if fs:
+            cursor = max(0, min(cursor, len(fs) - 1))
+
+        footer_rows = 2
+        list_h = max(0, h - row - footer_rows)
+        scroll = max(0, cursor - list_h + 1) if list_h else 0
+
+        for i, s in enumerate(fs[scroll: scroll + list_h]):
+            y   = row + i
+            idx = i + scroll
+            is_sel = idx == cursor
+            is_cur = s == CURRENT
+            status = claude.get(s, "idle")
+            icon   = ICON.get(status, "·")
+            slot   = next((k for k, v in marks.items() if v == s), None)
+            mark_s = f"[{slot}]" if slot else "   "
+            cur_m  = "◀" if is_cur else " "
+            line   = f" {mark_s} {s:<28} {icon}  {cur_m}"
+
+            if is_sel:
+                attr = curses.color_pair(CP_SEL) | curses.A_BOLD
+            elif is_cur:
+                attr = curses.color_pair(CP_CURRENT)
+            else:
+                attr = curses.color_pair(STATUS_COLOR.get(status, CP_DIM))
+
+            addstr_safe(scr, y, 0, line, attr)
+
+        # ── footer ────────────────────────────────────
+        fy = h - 2
+        if mode == SEARCH:
+            addstr_safe(scr, fy, 0, f" /{query}█",
+                        curses.color_pair(CP_MODE) | curses.A_BOLD)
+        elif mode == MARK:
+            addstr_safe(scr, fy, 0, " MARK → press a/s/d/f to assign slot",
+                        curses.color_pair(CP_MODE) | curses.A_BOLD)
+        elif msg_ttl > 0:
+            addstr_safe(scr, fy, 0, f" {msg}", curses.color_pair(CP_CURRENT))
+            msg_ttl -= 1
+
+        hints = " a-f:jump  m:mark  /:search  j/k:nav  ↵:open  r:refresh  q:quit"
+        addstr_safe(scr, h - 1, 0, hints, curses.color_pair(CP_DIM) | curses.A_DIM)
+
+        scr.refresh()
+
+        # ── input ─────────────────────────────────────
+        ch = scr.getch()
+        if ch == -1:
+            continue
+
+        if mode == SEARCH:
+            if ch == 27:
+                mode, query = NORMAL, ""
+            elif ch in (curses.KEY_BACKSPACE, 127, 8):
+                query = query[:-1]
+            elif ch in (10, 13, curses.KEY_ENTER):
+                if fs and 0 <= cursor < len(fs):
+                    os.execvp("zellij", ["zellij", "attach", fs[cursor]])
+            elif ch in (ord("j"), curses.KEY_DOWN):
+                cursor = min(cursor + 1, len(fs) - 1)
+            elif ch in (ord("k"), curses.KEY_UP):
+                cursor = max(cursor - 1, 0)
+            elif 32 <= ch < 127:
+                query += chr(ch)
+                cursor = 0
+
+        elif mode == MARK:
+            if ch == 27:
+                mode = NORMAL
+            elif 0 <= ch < 256 and chr(ch) in MARK_KEYS:
+                key = chr(ch)
+                if fs and 0 <= cursor < len(fs):
+                    marks[key] = fs[cursor]
+                    save_marks(marks)
+                    msg, msg_ttl = f"Marked '{fs[cursor]}' → [{key}]", 20
+                mode = NORMAL
+
+        else:  # NORMAL
+            if ch == 6:  # Ctrl+f
+                mode, query, cursor = SEARCH, "", 0
+            elif ch == ord("/"):
+                mode, query, cursor = SEARCH, "", 0
+            elif ch == ord("m"):
+                mode = MARK
+            elif ch in (10, 13, curses.KEY_ENTER):
+                if fs and 0 <= cursor < len(fs):
+                    os.execvp("zellij", ["zellij", "attach", fs[cursor]])
+            elif ch in (ord("j"), curses.KEY_DOWN):
+                cursor = min(cursor + 1, len(fs) - 1)
+            elif ch in (ord("k"), curses.KEY_UP):
+                cursor = max(cursor - 1, 0)
+            elif ch == ord("r"):
+                sessions = fetch_sessions()
+                claude   = fetch_claude_status()
+                cursor   = 0
+            elif ch in (ord("q"), 27):
+                sys.exit(0)
+            elif 0 <= ch < 256 and chr(ch) in MARK_KEYS:
+                key = chr(ch)
+                target = marks.get(key)
+                if target and target in sessions:
+                    os.execvp("zellij", ["zellij", "attach", target])
+                else:
+                    msg = f"[{key}] empty" if not target else f"[{key}] '{target}' not running"
+                    msg_ttl = 20
+
+
+if __name__ == "__main__":
+    try:
+        curses.wrapper(main)
+    except KeyboardInterrupt:
+        sys.exit(0)

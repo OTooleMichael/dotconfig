@@ -3,6 +3,12 @@
 DNVIM_COPY_FILE = "/tmp/dnvim_copy_watcher.txt"
 WATCH_REGISTRIES = { "i" }
 
+vim.api.nvim_create_autocmd("VimLeave", {
+  callback = function()
+    vim.lsp.stop_client(vim.lsp.get_clients(), true)
+  end,
+})
+
 vim.api.nvim_create_autocmd("TextYankPost", { -- Create an autocommand for the "TextYankPost" event
   pattern = "*", -- Match any pattern
   group = DnvimGroup, -- Assign the autocommand to the "YankCopyGroup" group

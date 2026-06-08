@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""Show running Claude Code sessions. Select one to jump to its zellij session."""
+
+import json
+import os
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+
+SESSIONS_DIR = Path("~/.claude/sessions").expanduser()
+HOME = Path.home()
+CURRENT_ZJ_SESSION = os.environ.get("ZELLIJ_SESSION_NAME", "")
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def _ago(ms: int) -> str:
+    delta = datetime.now(timezone.utc).timestamp() - ms / 1000
+    if delta < 60:
+        return f"{int(delta)}s"
+    if delta < 3600:
+        return f"{int(delta/60)}m"
+    if delta < 86400:
+        return f"{int(delta/3600)}h"
+    return f"{int(delta/86400)}d"
+
+
+def _short_cwd(cwd: str) -> str:
+    try:
+        return "~/" + str(Path(cwd).relative_to(HOME))
+    except ValueError:
+        return cwd
+
+
+def _build_proc_map() -> tuple[dict[int, int], dict[int, str], dict[int, list[int]]]:
+    """Return (ppid_map, comm_map, children_map) from one ps call."""
+    result = subprocess.run(["ps", "-eo", "pid,ppid,stat,comm"], capture_output=True, text=True)
+    ppid_map: dict[int, int] = {}
+    comm_map: dict[int, str] = {}
+    stat_map: dict[int, str] = {}
+    children: dict[int, list[int]] = {}
+    for line in result.stdout.strip().splitlines()[1:]:
+        parts = line.split(None, 3)
+        if len(parts) < 4:
+            continue
+        pid, ppid, stat, comm = int(parts[0]), int(parts[1]), parts[2], parts[3].strip()
+        ppid_map[pid] = ppid
+        comm_map[pid] = comm
+        stat_map[pid] = stat
+        children.setdefault(ppid, []).append(pid)
+    return ppid_map, comm_map, stat_map, children
+
+
+def _zellij_session_for(pid: int, ppid_map: dict, comm_map: dict) -> str | None:
+    """Walk process tree up from pid to find zellij server, return session name."""
+    visited, cur = set(), pid
+    while cur and cur not in visited:
+        visited.add(cur)
+        comm = comm_map.get(cur, "")
+        if "zellij" in comm:
+            # Get cmdline to extract session name from --server /path/<name>
+            try:
+                cmdline = subprocess.run(
+                    ["ps", "-p", str(cur), "-o", "args="],
+                    capture_output=True, text=True
+                ).stdout.strip()
+                if "--server" in cmdline:
+                    return cmdline.split("--server")[-1].strip().split()[-1].split("/")[-1]
+            except Exception:
+                pass
+            return None
+        cur = ppid_map.get(cur)
+    return None
+
+
+def _session_state(pid: int, stat_map: dict, children: dict, comm_map: dict) -> str:
+    state = stat_map.get(pid, "?")
+    kids = [c for c in children.get(pid, []) if stat_map.get(c, "") not in ("Z",)]
+    if kids:
+        return f"⚙  running ({len(kids)})"
+    if state.startswith("R"):
+        return "⏳ thinking"
+    return "⌨  waiting"
+
+
+def main() -> None:
+    if not SESSIONS_DIR.exists():
+        print("No sessions directory found.")
+        return
+
+    sessions = []
+    for f in SESSIONS_DIR.glob("*.json"):
+        try:
+            data = json.loads(f.read_text())
+            sessions.append(data)
+        except Exception:
+            continue
+
+    ppid_map, comm_map, stat_map, children = _build_proc_map()
+
+    running = [s for s in sessions if _alive(s["pid"])]
+    stale_count = len(sessions) - len(running)
+    running.sort(key=lambda s: s.get("startedAt", 0), reverse=True)
+
+    if not running:
+        print("\n  No running Claude sessions.")
+        print()
+        input("  [enter to close] ")
+        return
+
+    # Build fzf input lines: "ZJ_SESSION | STATE | AGE | CWD"
+    entries = []
+    for s in running:
+        pid = s["pid"]
+        zj = _zellij_session_for(pid, ppid_map, comm_map) or "?"
+        state = _session_state(pid, stat_map, children, comm_map)
+        age = _ago(s.get("startedAt", 0))
+        cwd = _short_cwd(s.get("cwd", "?"))
+        marker = " ◀" if zj == CURRENT_ZJ_SESSION else ""
+        entries.append((zj, state, age, cwd, marker, pid))
+
+    # Format for fzf
+    w_zj = max(len(e[0]) for e in entries) + 1
+    w_state = 18
+    w_age = 5
+    lines = []
+    for zj, state, age, cwd, marker, pid in entries:
+        line = f"{zj:<{w_zj}}  {state:<{w_state}}  {age:<{w_age}}  {cwd}{marker}"
+        lines.append((line, zj, pid))
+
+    fzf_input = "\n".join(l[0] for l in lines)
+    result = subprocess.run(
+        ["fzf", "--prompt=session › ", "--height=100%", "--no-sort",
+         "--header=enter=jump  esc=close"],
+        input=fzf_input, capture_output=True, text=True
+    )
+
+    if result.returncode != 0 or not result.stdout.strip():
+        return  # esc / no selection
+
+    selected_line = result.stdout.strip()
+    # Match back to entry
+    matched = next((l for l in lines if l[0] == selected_line), None)
+    if not matched:
+        return
+
+    _, target_session, _ = matched
+
+    if not target_session or target_session == "?":
+        print(f"\n  Could not determine zellij session.")
+        input("  [enter to close] ")
+        return
+
+    if target_session == CURRENT_ZJ_SESSION:
+        print(f"\n  Already in session '{target_session}'.")
+        input("  [enter to close] ")
+        return
+
+    os.execvp("zellij", ["zellij", "attach", target_session])
+
+
+if __name__ == "__main__":
+    main()

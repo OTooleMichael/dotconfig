@@ -1,0 +1,8 @@
+aws-sso
+aws-sso --check
+dx auth airflow main
+lazyworktree
+prrr status
+slack-pull status
+slack-pull history
+slack-pull daemon

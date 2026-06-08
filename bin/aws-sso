@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""Refresh AWS SSO token. One login covers all profiles sharing the same sso_start_url.
+
+Usage:
+    aws-sso                     # login with first SSO URL found, or check if valid
+    aws-sso --profile data-prd  # use a specific profile's SSO URL
+    aws-sso --force             # force re-login even if token is still valid
+    aws-sso --check             # check token validity, exit 0=ok 1=expired
+    aws-sso --list              # list SSO profiles grouped by start URL
+"""
+
+import argparse
+import hashlib
+import json
+import sys
+import time
+import webbrowser
+from configparser import ConfigParser
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from urllib import error, request
+
+AWS_CONFIG = Path("~/.aws/config").expanduser()
+SSO_CACHE = Path("~/.aws/sso/cache").expanduser()
+EXPIRY_BUFFER_SECONDS = 300  # treat token as expired 5 min early
+
+
+# ── HTTP ──────────────────────────────────────────────────────────────────────
+
+def _post(url: str, payload: dict, timeout: int = 15) -> dict:
+    data = json.dumps(payload).encode()
+    req = request.Request(url, data=data, headers={"Content-Type": "application/json"})
+    try:
+        with request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read())
+    except error.HTTPError as e:
+        body = e.read()
+        try:
+            return json.loads(body)
+        except Exception:
+            raise RuntimeError(f"HTTP {e.code}: {body.decode(errors='replace')}") from e
+
+
+# ── Config ────────────────────────────────────────────────────────────────────
+
+def _read_sso_profiles() -> dict[str, dict]:
+    """Return {profile_name: config_dict} for all profiles with sso_start_url."""
+    if not AWS_CONFIG.exists():
+        raise FileNotFoundError(f"{AWS_CONFIG} not found")
+    cfg = ConfigParser()
+    cfg.read(AWS_CONFIG)
+    profiles = {}
+    for section in cfg.sections():
+        p = dict(cfg[section])
+        if "sso_start_url" not in p:
+            continue
+        name = section.removeprefix("profile ") if section != "default" else "default"
+        profiles[name] = p
+    return profiles
+
+
+def _group_by_start_url(profiles: dict[str, dict]) -> dict[str, list[str]]:
+    """Return {start_url: [profile_name, ...]}."""
+    groups: dict[str, list[str]] = {}
+    for name, p in profiles.items():
+        url = p["sso_start_url"]
+        groups.setdefault(url, []).append(name)
+    return groups
+
+
+# ── Token cache ───────────────────────────────────────────────────────────────
+
+def _cache_path(start_url: str) -> Path:
+    return SSO_CACHE / f"{hashlib.sha1(start_url.encode()).hexdigest()}.json"
+
+
+def _parse_expiry(s: str) -> datetime:
+    """Parse AWS expiry strings: ISO 8601 with UTC or +00:00."""
+    s = s.strip().replace("UTC", "+00:00")
+    return datetime.fromisoformat(s)
+
+
+def _load_token(start_url: str) -> str | None:
+    path = _cache_path(start_url)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+        exp = _parse_expiry(data["expiresAt"])
+        cutoff = datetime.now(timezone.utc) + timedelta(seconds=EXPIRY_BUFFER_SECONDS)
+        if exp > cutoff:
+            return data["accessToken"]
+    except Exception:
+        pass
+    return None
+
+
+def _save_token(start_url: str, region: str, token: str, expires_at: datetime) -> None:
+    SSO_CACHE.mkdir(parents=True, exist_ok=True)
+    path = _cache_path(start_url)
+    payload = {
+        "accessToken": token,
+        "expiresAt": expires_at.strftime("%Y-%m-%dT%H:%M:%SUTC"),
+        "region": region,
+        "startUrl": start_url,
+    }
+    path.write_text(json.dumps(payload, indent=2))
+
+
+# ── Device authorization flow ─────────────────────────────────────────────────
+
+def _do_login(start_url: str, region: str, debug: bool = False) -> str:
+    base = f"https://oidc.{region}.amazonaws.com"
+
+    # 1. Register client
+    reg = _post(f"{base}/client/register", {
+        "clientName": "aws-sso",
+        "clientType": "public",
+    })
+    if debug:
+        print(f"[debug] register: {reg}")
+    client_id = reg["clientId"]
+    client_secret = reg["clientSecret"]
+
+    # 2. Start device authorization
+    auth = _post(f"{base}/device_authorization", {
+        "clientId": client_id,
+        "clientSecret": client_secret,
+        "startUrl": start_url,
+    })
+    if debug:
+        print(f"[debug] device_auth: {auth}")
+    device_code = auth["deviceCode"]
+    user_code = auth["userCode"]
+    verify_url = auth.get("verificationUriComplete") or (
+        auth["verificationUri"] + "?user_code=" + user_code
+    )
+    poll_interval = max(auth.get("interval", 5), 2)
+
+    print(f"Opening browser for SSO login...")
+    print(f"  URL:  {verify_url}")
+    print(f"  Code: {user_code}")
+    webbrowser.open(verify_url)
+    print("Waiting for approval", end="", flush=True)
+
+    # 3. Poll
+    deadline = time.time() + 180
+    while time.time() < deadline:
+        time.sleep(poll_interval)
+        resp = _post(f"{base}/token", {
+            "clientId": client_id,
+            "clientSecret": client_secret,
+            "grantType": "urn:ietf:params:oauth:grant-type:device_code",
+            "deviceCode": device_code,
+        })
+        if debug:
+            print(f"\n[debug] token poll: {resp}")
+        err = resp.get("error")
+        if err == "authorization_pending":
+            print(".", end="", flush=True)
+            continue
+        if err == "slow_down":
+            poll_interval += 3
+            print(".", end="", flush=True)
+            continue
+        if err:
+            print()
+            raise RuntimeError(f"SSO error: {resp.get('error_description', err)}")
+
+        print(" ✓")
+        token = resp["accessToken"]
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=resp["expiresIn"])
+        _save_token(start_url, region, token, expires_at)
+        return token
+
+    print()
+    raise RuntimeError("Timed out waiting for SSO approval")
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def _resolve_start_url(profiles: dict[str, dict], profile_name: str | None) -> tuple[str, str]:
+    """Return (start_url, region) for the given profile or the first SSO profile found."""
+    if profile_name:
+        if profile_name not in profiles:
+            raise ValueError(f"Profile '{profile_name}' not found or has no SSO config")
+        p = profiles[profile_name]
+        return p["sso_start_url"], p.get("sso_region", p.get("region", "us-east-1"))
+    if not profiles:
+        raise ValueError("No SSO profiles found in ~/.aws/config")
+    first = next(iter(profiles.values()))
+    return first["sso_start_url"], first.get("sso_region", first.get("region", "us-east-1"))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--profile", "-p", help="AWS profile to resolve SSO URL from")
+    parser.add_argument("--force", "-f", action="store_true", help="Force re-login even if token is valid")
+    parser.add_argument("--check", action="store_true", help="Check token validity only (exit 0=ok, 1=expired)")
+    parser.add_argument("--list", "-l", action="store_true", help="List SSO profiles grouped by start URL")
+    parser.add_argument("--debug", action="store_true", help="Print raw HTTP responses during login")
+    args = parser.parse_args()
+
+    profiles = _read_sso_profiles()
+
+    if args.list:
+        groups = _group_by_start_url(profiles)
+        for url, names in groups.items():
+            token = _load_token(url)
+            status = "valid" if token else "expired/missing"
+            print(f"\n{url}  [{status}]")
+            for name in sorted(names):
+                print(f"  {name}")
+        return
+
+    start_url, region = _resolve_start_url(profiles, args.profile)
+    groups = _group_by_start_url(profiles)
+    covered = groups.get(start_url, [])
+
+    existing_token = _load_token(start_url)
+
+    if args.check:
+        if existing_token:
+            print(f"✓ Token valid — covers {len(covered)} profile(s): {', '.join(sorted(covered))}")
+            sys.exit(0)
+        else:
+            print("✗ Token expired or missing")
+            sys.exit(1)
+
+    if existing_token and not args.force:
+        print(f"✓ SSO token already valid — covers {len(covered)} profile(s): {', '.join(sorted(covered))}")
+        return
+
+    if args.force:
+        print("Forcing re-login...")
+
+    _do_login(start_url, region, debug=args.debug)
+    print(f"✓ Token saved — covers {len(covered)} profile(s): {', '.join(sorted(covered))}")
+
+
+if __name__ == "__main__":
+    main()

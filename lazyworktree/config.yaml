@@ -1,0 +1,7 @@
+worktree_dir: "$LWT_REPO_PATH/.worktrees"
+session_prefix: "wt-"
+git_pager: "delta"
+sort_mode: "switched"
+auto_refresh: true
+refresh_interval: 10
+icon_set: "nerd-font-v3"
