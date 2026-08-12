@@ -1,0 +1,13 @@
+// Add to your ~/.config/zellij/config.kdl inside the keybinds { normal { ... } } block:
+//
+// shared_except "locked" {
+//     bind "Alt p" {
+//         LaunchOrFocusPlugin "file:/path/to/zj-session-picker.wasm" {
+//             floating true
+//             move_to_focused_tab true
+//         }
+//     }
+// }
+//
+// Replace /path/to/ with actual path after: cargo build --release --target wasm32-wasi
+// Wasm lands at: target/wasm32-wasi/release/zj_session_picker.wasm

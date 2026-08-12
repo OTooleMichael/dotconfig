@@ -154,6 +154,13 @@ keybinds clear-defaults=true {
             }
             SwitchToMode "locked"
         }
+        bind "Alt p" {
+            LaunchOrFocusPlugin "file:/Users/michaelotoole/.config/zj-session-picker/target/wasm32-wasip1/release/zj-session-picker.wasm" {
+                floating true
+                move_to_focused_tab true
+            }
+            SwitchToMode "locked"
+        }
         bind "Alt tab" { MovePane; }
         bind "Alt ," {
             Run "/Users/michaelotoole/.config/zellij/launcher.sh" {
