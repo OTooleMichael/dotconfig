@@ -3,7 +3,7 @@ set -eo pipefail
 
 echo "Installing homebrew packages..."
 brew update
-brew install fzf ripgrep bat zoxide neovim zoxide zellij
+brew install fzf ripgrep bat zoxide neovim zoxide zellij mise
 brew cleanup
 brew install --cask font-jetbrains-mono-nerd-font
 
@@ -25,6 +25,10 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 # Install docker-find
 "$HOME/.config/docker-find/install.sh"
+
+# Setup mise config
+mkdir -p ~/.config/mise
+ln -sf ~/.config/mise/config.toml ~/.config/mise/config.toml 2>/dev/null || true
 
 ln -s -f ~/.config/.zshrc ~/.zshrc
 set e

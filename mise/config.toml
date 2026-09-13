@@ -1,0 +1,36 @@
+# mise configuration
+# https://mise.jdx.dev/configuration.html
+
+[settings]
+# Use asdf-compatible legacy version files (.node-version, .ruby-version, etc)
+legacy_version_file = true
+
+# Automatically activate environments when entering directories
+auto_activate = true
+
+# Enable experimental features
+experimental = false
+
+[tools]
+# Global tool versions go here
+# Example:
+# node = "lts"
+# python = "3.12"
+# rust = "stable"
+
+# Usage in projects:
+# Create .mise.toml or .tool-versions in project root
+# mise.toml example:
+#   [tools]
+#   node = "20.11.0"
+#   python = "3.12.0"
+
+[env]
+# Global environment variables
+# Example:
+# NODE_ENV = "development"
+
+[alias]
+# Aliases for tool versions
+# Example:
+# python = { "3" = "3.12", "2" = "2.7" }
