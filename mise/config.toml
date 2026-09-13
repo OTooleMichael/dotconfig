@@ -5,8 +5,8 @@
 # Use asdf-compatible legacy version files (.node-version, .ruby-version, etc)
 legacy_version_file = true
 
-# Automatically activate environments when entering directories
-auto_activate = true
+# Automatically install tools when entering directories with version files
+auto_install = true
 
 # Enable experimental features
 experimental = false
