@@ -1,3 +1,13 @@
+# Homebrew (Apple Silicon)
+if [ -x /opt/homebrew/bin/brew ]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+
+# mise - polyglot version manager
+if command -v mise > /dev/null 2>&1; then
+  eval "$(mise activate zsh)"
+fi
+
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
@@ -153,21 +163,23 @@ alias onport='on-port-fn'
 
 
 ### MANAGED BY RANCHER DESKTOP START (DO NOT EDIT)
-export PATH="/Users/michaelotoole/.rd/bin:$PATH"
+export PATH="/Users/michael.otoole/.rd/bin:$PATH"
 ### MANAGED BY RANCHER DESKTOP END (DO NOT EDIT)
 
 # Go binary path (added by dx installer)
-export PATH="$PATH:/Users/michaelotoole/go/bin"
+export PATH="$PATH:$HOME/go/bin"
 
 # bun completions
-[ -s "/Users/michaelotoole/.bun/_bun" ] && source "/Users/michaelotoole/.bun/_bun"
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 
 # bun
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
 # dx shell completion
-eval "$(dx completion zsh)"
+if command -v dx > /dev/null 2>&1; then
+  eval "$(dx completion zsh)"
+fi
 
 # BEGIN dx claude-code-otel
 export CLAUDE_CODE_ENABLE_TELEMETRY=1
@@ -179,7 +191,7 @@ export OTEL_RESOURCE_ATTRIBUTES="user.email=michael.o.toole@traderepublic.com"
 # END dx claude-code-otel
 
 # >>> dx ai-kit (managed — do not edit) >>>
-[ -r /Users/michaelotoole/.traderepublic/ai-kit/ai-kit-env.sh ] && source /Users/michaelotoole/.traderepublic/ai-kit/ai-kit-env.sh
+[ -r "$HOME/.traderepublic/ai-kit/ai-kit-env.sh" ] && source "$HOME/.traderepublic/ai-kit/ai-kit-env.sh"
 # <<< dx ai-kit <<<
 alias prrr="PYTHONUNBUFFERED=1 ~/projects/prrr/.venv/bin/prrr"
 alias slack-pull="~/.config/slack-pull/.venv/bin/slack-pull"
@@ -193,4 +205,8 @@ fi
 if which zoxide > /dev/null 2>&1; then
     eval "$(zoxide init zsh --cmd cd)"
 fi
+
+# Added by LM Studio CLI (lms)
+export PATH="$PATH:/Users/michael.otoole/.lmstudio/bin"
+# End of LM Studio CLI section
 alias dnvim="nvim --headless -n -c 'lua require(\"dnvim\").cli()' -- " #dnvim-alias
