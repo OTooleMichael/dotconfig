@@ -95,6 +95,7 @@ Run from the target worktree. No plugins or user config are loaded:
 ```sh
 CLI="$HOME/src/dotconfig/nvim/scripts/review.lua"
 nvim --headless -u NONE -l "$CLI" path
+nvim --headless -u NONE -l "$CLI" snapshot  # structured JSON on stdout
 nvim --headless -u NONE -l "$CLI" list open
 nvim --headless -u NONE -l "$CLI" list all zj-session-picker/src/state.rs
 nvim --headless -u NONE -l "$CLI" reply THREAD_ID /tmp/reply-body.md agent
@@ -109,6 +110,17 @@ Suggested agent instruction:
 > Read each thread, make the requested change or explain the issue, append a
 > reply, and mark it addressed. Leave final resolution to the human. Use the
 > CLI for writes; never edit or replace the JSONL directly.
+
+### Automatic delivery to Pi
+
+See [the Pi extension](../pi/README.md) for `/review` and non-interrupting checks
+between agent turns. Install with `bash pi/install.sh` from the repository root,
+then run `/reload` in Pi. Use the same `NVIM_REVIEW_DIR` in both processes when
+reviewing a different worktree from the agent's.
+
+`snapshot` emits `{version, root, log, events, threads}` on stdout, with events
+and reconstructed threads as arrays (including empty arrays). It makes no writes.
+Other CLI commands retain their human-oriented output.
 
 ## Event schema v1
 

@@ -9,6 +9,7 @@ local function main()
     print([[Run from the target worktree. NVIM_REVIEW_DIR can select a shared absolute directory.
 commands:
   path                              Print JSONL path
+  snapshot                          JSON on stdout: root, log, events, threads
   archive-resolved                  Snapshot log, then prune resolved threads
   list [all|open|addressed|resolved] [relative-file]
   append <event.json>                Append validated comment/reply/status (author required)
@@ -24,7 +25,11 @@ Status fields: type=status, author, thread, status.]])
     return
   end
   local ctx = store.context()
-  if command == "archive-resolved" then print(store.archive_resolved(ctx))
+  if command == "snapshot" then
+    local events = store.read(ctx)
+    local threads = store.threads(events)
+    io.stdout:write(vim.json.encode({ version = 1, root = ctx.root, log = ctx.log, events = events, threads = threads }) .. "\n")
+  elseif command == "archive-resolved" then print(store.archive_resolved(ctx))
   elseif command == "path" then print(ctx.log)
   elseif command == "list" then
     local status = arg[2] or "all"

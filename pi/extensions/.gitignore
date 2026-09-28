@@ -1,0 +1,5 @@
+# Only explicitly opted-in extension source is versioned.
+# Existing personal extensions imported by install.sh stay machine-local.
+/*
+!/.gitignore
+!/review/
