@@ -41,12 +41,13 @@ local dirty = vim.api.nvim_get_current_buf()
 local closed, opened = false, false
 package.loaded["diffview.lib"] = { get_current_view = function() return {} end }
 vim.api.nvim_create_user_command("DiffviewClose", function() closed = true end, {})
-vim.api.nvim_create_user_command("DiffviewOpen", function()
+vim.api.nvim_create_user_command("DiffviewOpen", function(opts)
+  assert(opts.args == "main")
   opened = true
   assert(closed)
   assert(vim.fn.getcwd() == vim.uv.fs_realpath(target))
   assert(vim.api.nvim_buf_get_name(0) == "")
-end, {})
+end, { nargs = "*" })
 open({ path = target })
 assert(opened)
 assert(vim.api.nvim_buf_is_valid(dirty) and vim.bo[dirty].modified)

@@ -10,7 +10,7 @@ return {
       },
     },
     keys = {
-      { "<leader>gv", "<cmd>DiffviewOpen<cr>", desc = "Diffview: working tree" },
+      { "<leader>gv", "<cmd>DiffviewOpen main<cr>", desc = "Diffview: compare against main" },
       { "<leader>gV", "<cmd>DiffviewClose<cr>", desc = "Diffview: close" },
       { "<leader>ge", "<cmd>DiffviewToggleFiles<cr>", desc = "Diffview: toggle file panel" },
       { "<leader>gH", "<cmd>DiffviewFileHistory %<cr>", desc = "Diffview: current file history" },
