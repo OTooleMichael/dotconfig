@@ -19,3 +19,6 @@ acli/
 slack-pull/
 prrr/
 temporalio/
+
+# Local review logs, locks, and archives (when stored outside Git metadata)
+agent-review/
