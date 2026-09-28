@@ -9,7 +9,7 @@ Restart Neovim after changing the config. Leader is Space.
 
 | Key | Action |
 | --- | --- |
-| `<leader>gv` | Diffview: working tree against index |
+| `<leader>gv` | Diffview: working tree against `main` |
 | `<leader>gV` | Close Diffview |
 | `<leader>ge` | Toggle Diffview file panel |
 | `<leader>gH` | Current file history |
@@ -31,13 +31,17 @@ Useful commands from the repository root:
 :DiffviewClose
 ```
 
+`Space gv` and the worktree picker compare `main` to the working tree, including
+committed and uncommitted changes. Repositories must have a local `main` branch.
+Use bare `:DiffviewOpen` for the index comparison or pass an explicit revision.
+
 `HEAD` includes staged and unstaged changes; `main...HEAD` shows committed
 branch changes from the merge base. The two-SHA form compares exact checkpoints.
 Diffview is not read-only: edits and staging actions affect the selected checkout.
 
 The worktree picker lists existing worktrees for the current file's repository
 (or cwd for non-file buffers). Enter closes the current Diffview, switches cwd to
-the selected worktree, and opens its diff in the same Neovim. Existing buffers,
+the selected worktree, and opens its diff against `main` in the same Neovim. Existing buffers,
 including unsaved edits, remain open and still refer to their original worktrees;
 H/L can cycle through them. No terminal integration, copying commands, or
 worktree creation/deletion is involved.

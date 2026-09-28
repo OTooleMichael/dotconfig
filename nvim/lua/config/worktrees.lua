@@ -36,7 +36,7 @@ function M.open(worktree)
   -- project root determine the new diff or file picker's repository.
   vim.cmd("hide enew")
   vim.cmd.cd(vim.fn.fnameescape(worktree.path))
-  vim.cmd("DiffviewOpen")
+  vim.cmd("DiffviewOpen main")
 end
 
 function M.pick()
