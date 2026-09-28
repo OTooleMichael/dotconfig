@@ -50,6 +50,7 @@ local function compose(ctx, event, title)
       vim.notify("Published " .. e.id)
     end),
   })
+  vim.cmd("startinsert")
 end
 
 M.comment = guard(function(opts)
