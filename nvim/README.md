@@ -58,6 +58,7 @@ See [REVIEW.md](REVIEW.md) for the JSONL model, agent CLI, sharing logs, and cle
 
 - `Space rc`: comment on cursor line or visually selected range.
 - `Space rC`: comment on the entire file.
+- `Space rs`: general worktree steering (shown in `Space ra`, no file attachment).
 - `Space rv` / `Space rl` / `Space ra`: comments here / in file / in worktree.
 - Comment/reply buffer: `:w` publishes, `:q!` discards.
 - Thread view: `r` replies, `s` changes status, Enter jumps to source, `R` refreshes.

@@ -1,4 +1,5 @@
 -- Run from nvim/: nvim --headless -u NONE -l tests/review.lua
+vim.opt.runtimepath:prepend(vim.fn.getcwd())
 package.path = "./lua/?.lua;" .. package.path
 local store = require("review.store")
 local root = vim.fn.tempname() .. " review test"
@@ -81,6 +82,44 @@ for _ = 1, 4 do
 end
 for _, job in ipairs(jobs) do local result = job:wait(); assert(result.code == 0, result.stderr) end
 assert(#store.threads(store.read(ctx))[1].replies == 4)
+-- Worktree steering has no fake file/line and works from an unnamed buffer.
+vim.cmd("enew")
+vim.cmd.cd(vim.fn.fnameescape(root))
+vim.cmd("ReviewSteer")
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "Keep this change focused" })
+vim.cmd("write")
+local steering = store.threads(store.read(ctx))[2]
+assert(steering.comment.scope == "worktree" and steering.comment.path == nil and steering.comment.line == nil)
+assert(store.location(steering.comment) == "./ (worktree)")
+assert(not pcall(store.append, ctx, { type = "comment", scope = "worktree", path = "fake", author = "human", body = "invalid" }))
+vim.cmd.edit(vim.fn.fnameescape(root .. "/source.txt"))
+ui.mark(source)
+assert(#vim.api.nvim_buf_get_extmarks(source, ns, 0, -1, {}) == 1) -- Only the existing range sign.
+ui.view("file")
+assert(not table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\n"):find("Keep this change focused", 1, true))
+vim.cmd("quit")
+ui.view("all")
+local steering_row
+for i, line in ipairs(vim.api.nvim_buf_get_lines(0, 0, -1, false)) do
+  if line:find(steering.id, 1, true) then steering_row = i end
+end
+assert(steering_row)
+vim.api.nvim_win_set_cursor(0, { steering_row, 0 })
+local view_buf = vim.api.nvim_get_current_buf()
+vim.fn.maparg("<CR>", "n", false, true).callback()
+assert(vim.api.nvim_get_current_buf() == view_buf) -- No fake source jump.
+vim.fn.maparg("r", "n", false, true).callback()
+vim.api.nvim_buf_set_lines(0, 0, -1, false, { "Acknowledged" })
+vim.cmd("write")
+assert(#store.threads(store.read(ctx))[2].replies == 1)
+vim.ui.select = function(_, _, callback) callback("resolved") end
+vim.api.nvim_win_set_cursor(0, { steering_row, 0 })
+vim.fn.maparg("s", "n", false, true).callback()
+vim.ui.select = select
+assert(store.threads(store.read(ctx))[2].status == "resolved")
+vim.cmd("quit")
+store.archive_resolved(ctx)
+assert(#store.threads(store.read(ctx)) == 1)
 -- A torn write must block new appends, not concatenate more JSON onto it.
 vim.fn.writefile({ '{"version":' }, ctx.log, "ab")
 assert(not pcall(store.read, ctx))

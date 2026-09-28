@@ -30,6 +30,7 @@ return {
     init = function()
       require("review.ui").setup()
       vim.keymap.set({ "n", "x" }, "<leader>rc", ":ReviewComment<cr>", { desc = "Review: comment on line/range" })
+      vim.keymap.set("n", "<leader>rs", "<cmd>ReviewSteer<cr>", { desc = "Review: worktree steering" })
       vim.keymap.set("n", "<leader>rC", "<cmd>ReviewComment file<cr>", { desc = "Review: comment on file" })
       vim.keymap.set("n", "<leader>rv", "<cmd>ReviewComments line<cr>", { desc = "Review: comments here" })
       vim.keymap.set("n", "<leader>rl", "<cmd>ReviewComments file<cr>", { desc = "Review: file comments" })

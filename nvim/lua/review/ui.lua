@@ -19,6 +19,14 @@ local function source()
   return ctx, path
 end
 
+local function worktree_context()
+  local view = views[vim.api.nvim_get_current_buf()]
+  if view then return view.ctx end
+  if vim.b.review_context then return vim.b.review_context end
+  if vim.bo.buftype == "" and vim.api.nvim_buf_get_name(0) ~= "" then return source() end
+  return store.context()
+end
+
 local function scratch(title, editable)
   vim.cmd("botright 12new")
   local buf = vim.api.nvim_get_current_buf()
@@ -33,6 +41,7 @@ end
 
 local function compose(ctx, event, title)
   local buf = scratch(title .. " | :w publish · :q! discard", true)
+  vim.b[buf].review_context = ctx
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "" })
   vim.bo[buf].modified = false
   local saved = false
@@ -50,6 +59,7 @@ local function compose(ctx, event, title)
       vim.notify("Published " .. e.id)
     end),
   })
+  vim.cmd("startinsert")
 end
 
 M.comment = guard(function(opts)
@@ -59,6 +69,11 @@ M.comment = guard(function(opts)
   local event = store.anchor(ctx, path, opts.line1, opts.line2, scope,
     vim.api.nvim_buf_get_lines(0, 0, -1, false))
   compose(ctx, event, store.location(event))
+end)
+
+M.steer = guard(function()
+  local ctx = worktree_context()
+  compose(ctx, { type = "comment", author = "human", scope = "worktree" }, "Worktree: " .. ctx.root)
 end)
 
 local function matches(thread, spec)
@@ -76,7 +91,9 @@ local function render(buf)
       local start = #lines + 1
       local c = thread.comment
       vim.list_extend(lines, { "## " .. thread.id .. " · " .. thread.status, store.location(c),
-        "Author: " .. c.author .. " · " .. c.timestamp, "HEAD context: " .. (c.sha or "unknown"), "" })
+        "Author: " .. c.author .. " · " .. c.timestamp })
+      if c.scope ~= "worktree" then lines[#lines + 1] = "HEAD context: " .. (c.sha or "unknown") end
+      lines[#lines + 1] = ""
       vim.list_extend(lines, vim.split(c.body, "\n", { plain = true }))
       for _, reply in ipairs(thread.replies) do
         vim.list_extend(lines, { "", "### " .. reply.author .. " · " .. reply.timestamp, "" })
@@ -97,8 +114,7 @@ end
 M.view = guard(function(filter, status)
   local ctx, path, line
   if filter == "all" then
-    if vim.bo.buftype == "" and vim.api.nvim_buf_get_name(0) ~= "" then ctx = source()
-    else ctx = store.context() end
+    ctx = worktree_context()
   else
     ctx, path = source()
     if filter == "line" then line = vim.api.nvim_win_get_cursor(0)[1] end
@@ -124,6 +140,10 @@ M.view = guard(function(filter, status)
   end)
   map("<CR>", function()
     local c = selected().comment
+    if c.scope == "worktree" then
+      vim.notify("Worktree-wide feedback: " .. ctx.root)
+      return
+    end
     vim.cmd("wincmd p")
     vim.cmd.edit(vim.fn.fnameescape(ctx.root .. "/" .. c.path))
     vim.api.nvim_win_set_cursor(0, { math.min(c.line or 1, vim.api.nvim_buf_line_count(0)), 0 })
@@ -177,6 +197,7 @@ function M.setup()
     group = group, callback = guard(function(ev) M.mark(ev.buf) end),
   })
   vim.api.nvim_create_autocmd("FocusGained", { group = group, callback = guard(M.refresh) })
+  vim.api.nvim_create_user_command("ReviewSteer", M.steer, {})
   vim.api.nvim_create_user_command("ReviewComment", M.comment, {
     range = true, nargs = "?", complete = function() return { "file" } end,
   })

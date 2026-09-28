@@ -1,4 +1,5 @@
 -- From nvim/: nvim --headless -u NONE -l tests/worktrees.lua
+vim.opt.runtimepath:prepend(vim.fn.getcwd())
 package.path = "./lua/?.lua;" .. package.path
 local worktrees = require("config.worktrees")
 local parsed = worktrees.parse(table.concat({

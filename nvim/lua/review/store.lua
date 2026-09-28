@@ -64,19 +64,26 @@ local function with_lock(ctx, fn)
   return result
 end
 
+local function validate_comment(e)
+  assert(vim.tbl_contains({ "worktree", "file", "range" }, e.scope), "scope must be worktree, file or range")
+  if e.scope == "worktree" then
+    assert(e.path == nil and e.line == nil and e.end_line == nil, "worktree comments have no file/range")
+    return
+  end
+  assert(type(e.path) == "string" and e.path ~= "" and not e.path:match("^/")
+    and not e.path:match("^%.%./") and not e.path:find("/../", 1, true), "relative path required")
+  if e.scope ~= "range" then return end
+  assert(type(e.line) == "number" and type(e.end_line) == "number"
+    and e.line >= 1 and e.line % 1 == 0 and e.end_line >= e.line and e.end_line % 1 == 0, "invalid range")
+end
+
 function M.append(ctx, event)
   return with_lock(ctx, function()
     local _, threads = M.threads(M.read(ctx))
     local e = vim.deepcopy(event)
     assert(type(e.author) == "string" and e.author ~= "", "author required")
     if e.type == "comment" then
-      assert(type(e.path) == "string" and e.path ~= "" and not e.path:match("^/")
-        and not e.path:match("^%.%./") and not e.path:find("/../", 1, true), "relative path required")
-      assert(e.scope == "file" or e.scope == "range", "scope must be file or range")
-      if e.scope == "range" then
-        assert(type(e.line) == "number" and type(e.end_line) == "number"
-          and e.line >= 1 and e.line % 1 == 0 and e.end_line >= e.line and e.end_line % 1 == 0, "invalid range")
-      end
+      validate_comment(e)
     else
       assert(threads[e.thread], "Unknown thread: " .. tostring(e.thread))
       assert(e.type == "reply" or e.type == "status", "invalid event type")
@@ -121,6 +128,7 @@ function M.archive_resolved(ctx)
 end
 
 function M.location(comment)
+  if comment.scope == "worktree" then return "./ (worktree)" end
   return "./" .. comment.path .. (comment.scope == "file" and "" or
     (":" .. comment.line .. (comment.end_line == comment.line and "" or "-" .. comment.end_line)))
 end

@@ -1,6 +1,36 @@
 // Pure delivery policy; storage and thread reconstruction remain in Lua.
 export const MESSAGE_TYPE = "worktree-review-feedback";
 export const SETTINGS_TYPE = "worktree-review-settings";
+export const REQUEST_TYPE = "worktree-review-request";
+export const CHECK_TOOL = "review_check";
+
+export interface ReviewTarget { root: string; log: string }
+export interface CheckDetails {
+  version: 1;
+  target: ReviewTarget;
+  delivery: Delivery;
+}
+
+function checkDetails(entry: any): CheckDetails | undefined {
+  const msg = entry.type === "message" ? entry.message : undefined;
+  if (msg?.role !== "toolResult" || msg.toolName !== CHECK_TOOL || msg.isError) return;
+  const details = msg.details as CheckDetails | undefined;
+  if (details?.version === 1 && typeof details.target?.root === "string"
+    && typeof details.target?.log === "string") return details;
+}
+
+export function reviewTarget(entries: readonly any[]) {
+  let target: ReviewTarget | undefined;
+  let pending = false;
+  for (const entry of entries) {
+    if (entry.type === "custom_message" && entry.customType === REQUEST_TYPE) pending = true;
+    const details = checkDetails(entry);
+    if (!details) continue;
+    target = details.target;
+    pending = false;
+  }
+  return { target, pending };
+}
 
 export interface ReviewEvent {
   id: string;
@@ -33,8 +63,8 @@ export interface Delivery {
 export function delivered(entries: readonly any[], log: string): Set<string> {
   const ids = new Set<string>();
   for (const entry of entries) {
-    if (entry.type !== "custom_message" || entry.customType !== MESSAGE_TYPE) continue;
-    const details = entry.details as Delivery | undefined;
+    const details: Delivery | undefined = entry.type === "custom_message" && entry.customType === MESSAGE_TYPE
+      ? entry.details : checkDetails(entry)?.delivery;
     if (details?.version === 1 && details.log === log && Array.isArray(details.eventIds)) {
       for (const id of details.eventIds) ids.add(id);
     }
